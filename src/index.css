@@ -1,0 +1,102 @@
+@import "tailwindcss";
+
+@theme {
+  --color-parchment: #FAF6EE;
+  --color-parchment-light: #FFFDF7;
+  --color-parchment-dark: #F5EDE0;
+  --color-border-warm: #D4C5A9;
+  --color-border-light: #EDE8DC;
+  --color-text-warm: #2C2416;
+  --color-text-muted: #8B7355;
+  --color-text-faint: #A09080;
+
+  --color-dark-bg: #1A1612;
+  --color-dark-card: #1F1B16;
+  --color-dark-surface: #252019;
+  --color-dark-border: #3D3529;
+  --color-dark-text: #E8DCC8;
+  --color-dark-muted: #9B8E7A;
+
+  --color-gospel-mt: #8B4513;
+  --color-gospel-mc: #2F5233;
+  --color-gospel-lc: #1B3A5C;
+  --color-gospel-jn: #6B2D5B;
+
+  --color-gospel-mt-dark: #D4A574;
+  --color-gospel-mc-dark: #7CB88A;
+  --color-gospel-lc-dark: #6BA3D6;
+  --color-gospel-jn-dark: #C48DBF;
+
+  --color-highlight-yellow: #FFEAA7;
+  --color-highlight-green: #B8E6C8;
+  --color-highlight-blue: #B8D4E3;
+  --color-highlight-pink: #F5C6D0;
+  --color-highlight-purple: #D5B8E8;
+
+  --font-family-serif: 'Palatino Linotype', 'Book Antiqua', Palatino, serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-family-serif);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior: none;
+}
+
+#root {
+  width: 100%;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-warm);
+  border-radius: 3px;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: var(--color-dark-border);
+}
+
+@keyframes highlightFade {
+  0% { background-color: rgba(255, 234, 167, 0.5); }
+  100% { background-color: transparent; }
+}
+.highlight-flash {
+  animation: highlightFade 2s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideInLeft {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes slideInBottom {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+button { -webkit-tap-highlight-color: transparent; }
+
+input, textarea { font-size: 16px; } /* prevents iOS zoom */
