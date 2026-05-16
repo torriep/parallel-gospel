@@ -8,12 +8,12 @@ workflows:
     environment:
       ios_signing:
         distribution_type: app_store
-        bundle_identifier: com.pierreroberge.evangeleparallele
+        bundle_identifier: com.pierreroberge.parallelgospel
       vars:
         XCODE_WORKSPACE: "ios/App/App.xcworkspace"
         XCODE_SCHEME: "App"
         APP_STORE_APPLE_ID: 6762166162
-        BUNDLE_ID: "com.pierreroberge.evangeleparallele"
+        BUNDLE_ID: "com.pierreroberge.parallelgospel"
       node: 20.x
       xcode: latest
       cocoapods: default

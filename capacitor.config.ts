@@ -1,8 +1,8 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.pierreroberge.evangeleparallele',
-  appName: 'Évangile Parallèle',
+  appId: 'com.pierreroberge.parallelgospel',
+  appName: 'Parallel Gospels',
   webDir: 'dist',
   server: {
     androidScheme: 'https',
