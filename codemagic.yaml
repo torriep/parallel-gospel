@@ -11,7 +11,7 @@ workflows:
         XCODE_SCHEME: "App"
         APP_STORE_APPLE_ID: 6762166162
         BUNDLE_ID: "com.pierreroberge.parallelgospel"
-      node: 20
+      node: 22
       xcode: latest
       cocoapods: default
     triggering:
