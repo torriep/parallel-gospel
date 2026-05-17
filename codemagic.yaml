@@ -7,7 +7,7 @@ workflows:
       app_store_connect: Codemagic
     environment:
       vars:
-        XCODE_WORKSPACE: "ios/App/App.xcworkspace"
+        XCODE_PROJECT: "ios/App/App.xcodeproj"
         XCODE_SCHEME: "App"
         APP_STORE_APPLE_ID: 6762166162
         BUNDLE_ID: "com.pierreroberge.parallelgospel"
@@ -31,10 +31,6 @@ workflows:
       - name: Sync Capacitor iOS
         script: |
           npx cap sync ios
-      - name: Install CocoaPods
-        script: |
-          cd ios/App
-          pod install
       - name: Set build number from Codemagic build counter
         script: |
           cd ios/App
@@ -56,7 +52,7 @@ workflows:
       - name: Archive iOS app
         script: |
           xcode-project build-ipa \
-            --workspace "$XCODE_WORKSPACE" \
+            --project "$XCODE_PROJECT" \
             --scheme "$XCODE_SCHEME"
     artifacts:
       - build/ios/ipa/*.ipa
