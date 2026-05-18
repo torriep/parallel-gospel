@@ -31,6 +31,11 @@ workflows:
       - name: Sync Capacitor iOS
         script: |
           npx cap sync ios
+      - name: Fix bundle ID in pbxproj
+        script: |
+          PBX="ios/App/App.xcodeproj/project.pbxproj"
+          /usr/bin/sed -i '' 's/com\.pierreroberge\.evangeleparallele/com.pierreroberge.parallelgospel/g' "$PBX"
+          grep "PRODUCT_BUNDLE_IDENTIFIER" "$PBX" | head -3
       - name: Set build number from Codemagic build counter
         script: |
           cd ios/App
@@ -45,37 +50,9 @@ workflows:
           xcode-project use-profiles
       - name: Archive iOS app
         script: |
-          set -e
-          ARCHIVE_PATH="$CM_BUILD_DIR/build/ios/xcarchive/App.xcarchive"
-          IPA_OUT="$CM_BUILD_DIR/build/ios/ipa"
-          mkdir -p "$IPA_OUT"
-          xcodebuild \
-            -project "$XCODE_PROJECT" \
-            -scheme "$XCODE_SCHEME" \
-            -archivePath "$ARCHIVE_PATH" \
-            -destination 'generic/platform=iOS' \
-            -allowProvisioningUpdates \
-            archive
-          cat > /tmp/export.plist <<'EOF'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>method</key>
-            <string>app-store</string>
-            <key>signingStyle</key>
-            <string>automatic</string>
-            <key>uploadSymbols</key>
-            <true/>
-          </dict>
-          </plist>
-          EOF
-          xcodebuild \
-            -exportArchive \
-            -archivePath "$ARCHIVE_PATH" \
-            -exportOptionsPlist /tmp/export.plist \
-            -exportPath "$IPA_OUT" \
-            -allowProvisioningUpdates
+          xcode-project build-ipa \
+            --project "$XCODE_PROJECT" \
+            --scheme "$XCODE_SCHEME"
     artifacts:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
