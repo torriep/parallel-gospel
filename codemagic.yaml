@@ -43,16 +43,28 @@ workflows:
       - name: Set up signing
         script: |
           set -e
+          # Generate a fresh private key just for this build
+          openssl genrsa -out /tmp/cm-private-key 2048
+
           keychain initialize
+
+          # Create a NEW cert on Apple's side bound to our private key
+          app-store-connect certificates create \
+            --type IOS_DISTRIBUTION \
+            --certificate-key=@file:/tmp/cm-private-key \
+            --save
+
+          # Now fetch profiles (cert exists now, so this works)
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
+            --certificate-key=@file:/tmp/cm-private-key \
             --create
+
           keychain add-certificates
           xcode-project use-profiles --project "$XCODE_PROJECT"
-          echo "=== Signing settings in pbxproj after use-profiles ==="
+
+          echo "=== Signing settings in pbxproj ==="
           grep -E "(CODE_SIGN_STYLE|PROVISIONING_PROFILE|DEVELOPMENT_TEAM|PRODUCT_BUNDLE)" "ios/App/App.xcodeproj/project.pbxproj" | sort -u || true
-          echo "=== Profile files installed ==="
-          ls -la ~/Library/MobileDevice/Provisioning\ Profiles/ 2>/dev/null || echo "no profiles dir"
       - name: Archive iOS app
         script: |
           xcode-project build-ipa \
