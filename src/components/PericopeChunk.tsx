@@ -2,6 +2,7 @@ import { Fragment, useCallback, useMemo, useRef } from 'react';
 import { GOSPEL_KEYS, type GospelRow, type Pericope } from '../lib/types';
 import { VerseCell } from './VerseCell';
 import { SectionHeader } from './SectionHeader';
+import { useLanguage } from '../lib/i18n';
 import type { Theme } from '../lib/theme';
 
 export type PericopeChunkData = {
@@ -27,6 +28,7 @@ export function PericopeChunk({
   onRowLongPress,
   observeCell,
 }: PericopeChunkProps) {
+  const language = useLanguage();
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clearLongPress = useCallback(() => {
     if (longPressTimer.current) {
@@ -43,18 +45,18 @@ export function PericopeChunk({
       if (!rowIds.has(sp.startRow)) {
         // eslint-disable-next-line no-console
         console.warn(
-          `Sub-pericope "${sp.label}" startRow ${sp.startRow} not in chunk "${chunk.pericope.label}" — skipping inline header`
+          `Sub-pericope "${sp.label.fr}" startRow ${sp.startRow} not in chunk "${chunk.pericope.label.fr}" — skipping inline header`
         );
         continue;
       }
-      map.set(sp.startRow, sp.label);
+      map.set(sp.startRow, sp.label[language]);
     }
     return map;
-  }, [chunk]);
+  }, [chunk, language]);
 
   return (
     <>
-      <SectionHeader label={chunk.pericope.label} theme={theme} />
+      <SectionHeader label={chunk.pericope.label[language]} theme={theme} />
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr' }}>
         {chunk.rows.map(row => {
           const isHighlighted = highlightedRowId === row.id;

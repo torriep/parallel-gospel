@@ -5,6 +5,8 @@ import { useUserDataStore } from '../stores/userDataStore';
 import type { Theme } from '../lib/theme';
 import { TIMELINE_PHASES } from '../lib/types';
 import { useWidthClass } from '../hooks/useMediaQuery';
+import { useFontScale } from '../hooks/useFontScale';
+import { useLanguage, useT } from '../lib/i18n';
 import { BookmarkFilledIcon, ChevronDownIcon, ChevronRightIcon, CloseIcon, StarIcon } from './icons';
 
 export const SIDEBAR_WIDTH = 220;
@@ -22,6 +24,9 @@ export function Sidebar({ theme, onGoToRow }: SidebarProps) {
   const currentRowId = useAppStore(s => s.currentRowId);
   const pericopes = useDataStore(s => s.pericopes);
   const bookmarkCount = useUserDataStore(s => s.bookmarks.length);
+  const language = useLanguage();
+  const tr = useT();
+  const fs = useFontScale();
 
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
@@ -65,13 +70,13 @@ export function Sidebar({ theme, onGoToRow }: SidebarProps) {
           borderBottom: `0.5px solid ${theme.borderLight}`,
         }}
       >
-        <span style={{ fontSize: 13, fontWeight: 700, color: theme.textMuted, letterSpacing: 1, textTransform: 'uppercase' }}>
-          Navigation
+        <span style={{ fontSize: fs(13), fontWeight: 700, color: theme.textMuted, letterSpacing: 1, textTransform: 'uppercase' }}>
+          {tr('sidebar.navigation')}
         </span>
         {isCompact && (
           <button
             onClick={() => setShowSidebar(false)}
-            aria-label="Fermer"
+            aria-label={tr('sidebar.close')}
             style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 8, minWidth: 36, minHeight: 36 }}
           >
             <CloseIcon size={18} color={theme.textMuted} />
@@ -83,10 +88,10 @@ export function Sidebar({ theme, onGoToRow }: SidebarProps) {
       <div style={{ padding: '8px 12px 10px', borderBottom: `0.5px solid ${theme.borderLight}` }}>
         <button
           onClick={() => { setShowBookmarks(true); if (isCompact) setShowSidebar(false); }}
-          style={shortcutBtn(theme)}
+          style={{ ...shortcutBtn(theme), fontSize: fs(13) }}
         >
           <BookmarkFilledIcon size={14} color={theme.gospelColors.JN} />
-          <span style={{ flex: 1 }}>Signets</span>
+          <span style={{ flex: 1 }}>{tr('sidebar.bookmarks')}</span>
           {bookmarkCount > 0 && (
             <span
               style={{
@@ -136,14 +141,14 @@ export function Sidebar({ theme, onGoToRow }: SidebarProps) {
                 <span style={{ fontSize: 12, color: theme.gospelColors.LC }}>{phase.icon}</span>
                 <span
                   style={{
-                    fontSize: 12,
+                    fontSize: fs(12),
                     fontWeight: 700,
                     color: theme.textMuted,
                     textTransform: 'uppercase',
                     letterSpacing: 0.5,
                   }}
                 >
-                  {phase.label}
+                  {tr(`phase.${phase.id}` as const)}
                 </span>
               </button>
               {!isCollapsed && (
@@ -165,14 +170,14 @@ export function Sidebar({ theme, onGoToRow }: SidebarProps) {
                           borderRadius: 8,
                           cursor: 'pointer',
                           color: isActive ? theme.text : theme.textMuted,
-                          fontSize: 13,
+                          fontSize: fs(13),
                           fontFamily: 'inherit',
                           fontWeight: isActive ? 600 : 400,
                           lineHeight: 1.35,
                           minHeight: 36,
                         }}
                       >
-                        {p.label}
+                        {p.label[language]}
                       </button>
                     );
                   })}
@@ -185,7 +190,7 @@ export function Sidebar({ theme, onGoToRow }: SidebarProps) {
           style={{
             marginTop: 12,
             padding: '8px 12px',
-            fontSize: 11,
+            fontSize: fs(11),
             color: theme.textFaint,
             display: 'flex',
             alignItems: 'center',
@@ -194,7 +199,7 @@ export function Sidebar({ theme, onGoToRow }: SidebarProps) {
           }}
         >
           <StarIcon size={12} color={theme.textFaint} />
-          <span>{pericopes.length} péricopes</span>
+          <span>{pericopes.length} {tr('sidebar.pericopeCount')}</span>
         </div>
       </div>
     </div>

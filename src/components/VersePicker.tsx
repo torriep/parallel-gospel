@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState, useLayoutEffect } from 'react';
 import type { GospelKey } from '../lib/types';
-import { GOSPEL_NAMES, GOSPEL_MONOGRAMS } from '../lib/types';
+import { GOSPEL_MONOGRAMS } from '../lib/types';
 import { useDataStore } from '../stores/dataStore';
 import type { Theme } from '../lib/theme';
 import { useWidthClass } from '../hooks/useMediaQuery';
+import { useFontScale } from '../hooks/useFontScale';
+import { useT } from '../lib/i18n';
 import { ChevronRightIcon, CloseIcon } from './icons';
 
 interface VersePickerProps {
@@ -20,8 +22,10 @@ export function VersePicker({ gospelKey, anchorRect, onSelect, onClose, theme }:
   const widthClass = useWidthClass();
   const isCompact = widthClass === 'compact';
 
+  const tr = useT();
+  const fs = useFontScale();
   const color = theme.gospelColors[gospelKey];
-  const gospelName = GOSPEL_NAMES[gospelKey];
+  const gospelName = tr(`gospel.${gospelKey}` as const);
 
   const popoverRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top: number; flip: boolean; pointerLeft: number } | null>(null);
@@ -72,7 +76,7 @@ export function VersePicker({ gospelKey, anchorRect, onSelect, onClose, theme }:
     <div
       style={{
         padding: '10px 14px',
-        fontSize: 11,
+        fontSize: fs(11),
         color: theme.textFaint,
         fontStyle: 'italic',
         borderTop: `0.5px solid ${theme.borderLight}`,
@@ -80,7 +84,7 @@ export function VersePicker({ gospelKey, anchorRect, onSelect, onClose, theme }:
         background: theme.surface,
       }}
     >
-      Les trois autres évangiles se caleront sur le parallèle du rang choisi.
+      {tr('picker.parallel')}
     </div>
   );
 
@@ -101,12 +105,12 @@ export function VersePicker({ gospelKey, anchorRect, onSelect, onClose, theme }:
           style={{
             display: 'flex', alignItems: 'center', gap: 4,
             background: 'transparent', border: 'none', cursor: 'pointer',
-            color, fontFamily: 'inherit', fontSize: 14, minHeight: 36,
+            color, fontFamily: 'inherit', fontSize: fs(14), minHeight: 36,
             paddingRight: 6,
           }}
         >
           <ChevronRightIcon size={14} color={color} style={{ transform: 'rotate(180deg)' }} />
-          Chapitres
+          {tr('picker.chapters')}
         </button>
       )}
       <div style={{ flex: 1, textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
@@ -123,7 +127,7 @@ export function VersePicker({ gospelKey, anchorRect, onSelect, onClose, theme }:
         >
           {GOSPEL_MONOGRAMS[gospelKey]}
         </span>
-        <span style={{ fontWeight: 700, color: theme.text, fontSize: 15 }}>
+        <span style={{ fontWeight: 700, color: theme.text, fontSize: fs(15) }}>
           {selectedChapter ? `${gospelName} ${selectedChapter}` : gospelName}
         </span>
       </div>
@@ -134,7 +138,7 @@ export function VersePicker({ gospelKey, anchorRect, onSelect, onClose, theme }:
           minWidth: 36, minHeight: 36,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}
-        aria-label="Fermer"
+        aria-label={tr('picker.close')}
       >
         <CloseIcon size={18} color={theme.textMuted} />
       </button>
@@ -153,7 +157,7 @@ export function VersePicker({ gospelKey, anchorRect, onSelect, onClose, theme }:
                 aspectRatio: '1', minWidth: 36, minHeight: 36,
                 border: `0.5px solid ${theme.border}`,
                 borderRadius: 8, background: theme.card, cursor: 'pointer',
-                fontSize: 15, fontWeight: 600, color, fontFamily: 'inherit',
+                fontSize: fs(15), fontWeight: 600, color, fontFamily: 'inherit',
               }}
             >
               {ch}
@@ -170,7 +174,7 @@ export function VersePicker({ gospelKey, anchorRect, onSelect, onClose, theme }:
                 minWidth: 28, minHeight: 36,
                 border: `0.5px solid ${theme.border}`,
                 borderRadius: 6, background: theme.card, cursor: 'pointer',
-                fontSize: 13, color, fontFamily: 'inherit',
+                fontSize: fs(13), color, fontFamily: 'inherit',
                 padding: 0,
               }}
             >

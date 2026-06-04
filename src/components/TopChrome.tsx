@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../stores/appStore';
-import { GOSPEL_KEYS, GOSPEL_MONOGRAMS, GOSPEL_NAMES, type GospelKey } from '../lib/types';
+import { GOSPEL_KEYS, GOSPEL_MONOGRAMS, type GospelKey } from '../lib/types';
 import type { Theme } from '../lib/theme';
 import { VersePicker } from './VersePicker';
+import { useT } from '../lib/i18n';
+import { useFontScale } from '../hooks/useFontScale';
 import { ChevronDownIcon, MenuIcon, SearchIcon, SettingsIcon } from './icons';
 
 interface TopChromeProps {
@@ -11,6 +13,7 @@ interface TopChromeProps {
 }
 
 export function TopChrome({ theme, onVerseSelect }: TopChromeProps) {
+  const tr = useT();
   const showSidebar = useAppStore(s => s.showSidebar);
   const setShowSidebar = useAppStore(s => s.setShowSidebar);
   const setShowSearch = useAppStore(s => s.setShowSearch);
@@ -53,7 +56,7 @@ export function TopChrome({ theme, onVerseSelect }: TopChromeProps) {
       >
         <button
           onClick={() => setShowSidebar(!showSidebar)}
-          aria-label="Navigation"
+          aria-label={tr('sidebar.navigation')}
           aria-pressed={showSidebar}
           style={chromeBtn(theme)}
         >
@@ -88,14 +91,14 @@ export function TopChrome({ theme, onVerseSelect }: TopChromeProps) {
 
         <button
           onClick={() => setShowSearch(true)}
-          aria-label="Rechercher"
+          aria-label={tr('top.search')}
           style={chromeBtn(theme)}
         >
           <SearchIcon size={20} color={theme.text} />
         </button>
         <button
           onClick={() => setShowSettings(!showSettings)}
-          aria-label="Réglages"
+          aria-label={tr('top.settings')}
           aria-pressed={showSettings}
           style={chromeBtn(theme)}
         >
@@ -123,7 +126,10 @@ interface GospelHeaderProps {
 }
 
 function GospelHeader({ gospelKey, theme, onOpen }: GospelHeaderProps) {
+  const tr = useT();
+  const fs = useFontScale();
   const currentRefs = useAppStore(s => s.currentRefs);
+  const gospelName = tr(`gospel.${gospelKey}` as const);
 
   const color = theme.gospelColors[gospelKey];
   const currentRef = currentRefs[gospelKey];
@@ -167,7 +173,7 @@ function GospelHeader({ gospelKey, theme, onOpen }: GospelHeaderProps) {
           minHeight: 56,
           color: theme.text,
         }}
-        aria-label={`Choisir verset ${GOSPEL_NAMES[gospelKey]}`}
+        aria-label={`${tr('picker.selectVerse')} ${gospelName}`}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0 }}>
           <span
@@ -187,7 +193,7 @@ function GospelHeader({ gospelKey, theme, onOpen }: GospelHeaderProps) {
           </span>
           <span
             style={{
-              fontSize: 15,
+              fontSize: fs(15),
               fontWeight: 700,
               color,
               letterSpacing: 0.3,
@@ -197,13 +203,13 @@ function GospelHeader({ gospelKey, theme, onOpen }: GospelHeaderProps) {
               minWidth: 0,
             }}
           >
-            {GOSPEL_NAMES[gospelKey]}
+            {gospelName}
           </span>
         </div>
         <span
           style={{
             display: 'flex', alignItems: 'center', gap: 3,
-            fontSize: 12, color: `${color}CC`,
+            fontSize: fs(12), color: `${color}CC`,
             fontVariantNumeric: 'tabular-nums',
           }}
         >

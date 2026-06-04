@@ -75,7 +75,7 @@ export const VerseGrid = forwardRef<VerseGridHandle, VerseGridProps>(function Ve
         ) {
           // eslint-disable-next-line no-console
           console.warn(
-            `Span overflow: pericope "${sorted[nextPi].label}" absorbed into "${peri.label}"`
+            `Span overflow: pericope "${sorted[nextPi].label.fr}" absorbed into "${peri.label.fr}"`
           );
           subPericopes.push(sorted[nextPi]);
           nextPi++;

@@ -67,14 +67,24 @@ export interface Bookmark {
 
 export interface Pericope {
   id: string;
-  label: string;
+  /**
+   * Bilingual title. The UI picks the right one via `useLanguage()` from
+   * `lib/i18n`. Adding more languages later means adding more keys here.
+   */
+  label: { fr: string; en: string };
   phase: string;
   startRef: string;
   startRow?: number;
 }
 
+export type PhaseId = 'naissance' | 'ministere' | 'passion' | 'resurrection';
+
 export interface TimelinePhase {
-  id: string;
+  id: PhaseId;
+  /**
+   * Fallback French label, kept on the struct for legibility / debug logs.
+   * UI rendering should go through `useT()` with `phase.<id>` for translation.
+   */
   label: string;
   icon: string;
   range: [number, number];

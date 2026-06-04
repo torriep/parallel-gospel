@@ -2,6 +2,8 @@ import { useAppStore } from '../stores/appStore';
 import { useUserDataStore } from '../stores/userDataStore';
 import { GOSPEL_KEYS, GOSPEL_MONOGRAMS } from '../lib/types';
 import type { Theme } from '../lib/theme';
+import { useT } from '../lib/i18n';
+import { useFontScale } from '../hooks/useFontScale';
 import { BookmarkIcon } from './icons';
 
 interface StatusBarProps {
@@ -10,6 +12,8 @@ interface StatusBarProps {
 }
 
 export function StatusBar({ theme, progress }: StatusBarProps) {
+  const tr = useT();
+  const fs = useFontScale();
   const currentRefs = useAppStore(s => s.currentRefs);
   const setShowBookmarks = useAppStore(s => s.setShowBookmarks);
   const bookmarkCount = useUserDataStore(s => s.bookmarks.length);
@@ -38,7 +42,7 @@ export function StatusBar({ theme, progress }: StatusBarProps) {
         gap: 8,
         paddingLeft: 12,
         paddingRight: 6,
-        fontSize: 12,
+        fontSize: fs(12),
         color: theme.textMuted,
         fontFamily: "'Palatino Linotype', serif",
         flexShrink: 0,
@@ -60,14 +64,14 @@ export function StatusBar({ theme, progress }: StatusBarProps) {
         style={{
           color: theme.textFaint,
           fontVariantNumeric: 'tabular-nums',
-          fontSize: 11,
+          fontSize: fs(11),
         }}
       >
-        {progress}% lu
+        {progress}% {tr('status.read')}
       </span>
       <button
         onClick={() => setShowBookmarks(true)}
-        aria-label="Signets"
+        aria-label={tr('bookmarks.title')}
         style={{ ...iconBtn(theme), position: 'relative' }}
       >
         <BookmarkIcon size={18} color={theme.textMuted} />

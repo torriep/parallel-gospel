@@ -1,4 +1,6 @@
 import { useUserDataStore } from '../stores/userDataStore';
+import { useLanguage, useT } from '../lib/i18n';
+import { useFontScale } from '../hooks/useFontScale';
 import type { Theme } from '../lib/theme';
 
 interface BookmarksPanelProps {
@@ -9,6 +11,10 @@ interface BookmarksPanelProps {
 
 export function BookmarksPanel({ onGoToRow, onClose, theme }: BookmarksPanelProps) {
   const { bookmarks, removeBookmark } = useUserDataStore();
+  const tr = useT();
+  const fs = useFontScale();
+  const language = useLanguage();
+  const dateLocale = language === 'fr' ? 'fr-FR' : 'en-US';
 
   return (
     <div style={{
@@ -21,19 +27,19 @@ export function BookmarksPanel({ onGoToRow, onClose, theme }: BookmarksPanelProp
         borderBottom: `1px solid ${theme.border}`,
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
       }}>
-        <span style={{ fontSize: 15, fontWeight: 600, color: theme.text }}>Signets</span>
+        <span style={{ fontSize: fs(15), fontWeight: 600, color: theme.text }}>{tr('bookmarks.title')}</span>
         <button
           onClick={onClose}
           style={{
             background: 'none', border: 'none', cursor: 'pointer',
-            fontSize: 14, color: theme.textMuted, fontFamily: 'inherit',
+            fontSize: fs(14), color: theme.textMuted, fontFamily: 'inherit',
           }}
-        >Fermer</button>
+        >{tr('bookmarks.close')}</button>
       </div>
       <div style={{ flex: 1, overflow: 'auto' }}>
         {bookmarks.length === 0 && (
-          <div style={{ textAlign: 'center', padding: 40, color: theme.textMuted, fontSize: 14 }}>
-            Aucun signet. Appuyez longuement sur un verset pour en ajouter.
+          <div style={{ textAlign: 'center', padding: 40, color: theme.textMuted, fontSize: fs(14) }}>
+            {tr('bookmarks.empty')}
           </div>
         )}
         {bookmarks.map(bm => (
@@ -51,9 +57,9 @@ export function BookmarksPanel({ onGoToRow, onClose, theme }: BookmarksPanelProp
                 textAlign: 'left', flex: 1, fontFamily: 'inherit',
               }}
             >
-              <div style={{ fontSize: 13, fontWeight: 600, color: theme.text }}>{bm.label}</div>
-              <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 2 }}>
-                {new Date(bm.createdAt).toLocaleDateString('fr-FR')}
+              <div style={{ fontSize: fs(13), fontWeight: 600, color: theme.text }}>{bm.label}</div>
+              <div style={{ fontSize: fs(11), color: theme.textMuted, marginTop: 2 }}>
+                {new Date(bm.createdAt).toLocaleDateString(dateLocale)}
               </div>
             </button>
             <button

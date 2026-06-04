@@ -1,13 +1,24 @@
 import { useUserDataStore } from '../stores/userDataStore';
+import { useT, type StringKey } from '../lib/i18n';
+import { useFontScale } from '../hooks/useFontScale';
 import type { Theme } from '../lib/theme';
 import type { ReadingPlan } from '../lib/types';
 
+// `name` here is now the fallback French label; rendering goes through the
+// dictionary via the per-plan key in PLAN_NAME_KEY below.
 const READING_PLANS: ReadingPlan[] = [
   { id: 'passion-week', name: 'Semaine de la Passion', days: 7, pericopes: ['montee-jerusalem', 'entree-triomphale', 'derniere-cene', 'arrestation', 'crucifixion', 'resurrection', 'apparitions'] },
   { id: 'miracles', name: 'Miracles de Jésus', days: 14, pericopes: ['cana', 'guerisons', 'multiplication-pains'] },
   { id: 'parables', name: 'Paraboles', days: 10, pericopes: ['paraboles', 'sermon-montagne'] },
   { id: 'full-read', name: 'Lecture complète', days: 90, pericopes: [] },
 ];
+
+const PLAN_NAME_KEY: Record<string, StringKey> = {
+  'passion-week': 'plans.passionWeek',
+  'miracles':     'plans.miracles',
+  'parables':     'plans.parables',
+  'full-read':    'plans.fullReading',
+};
 
 interface ReadingPlansPanelProps {
   onClose: () => void;
@@ -16,6 +27,8 @@ interface ReadingPlansPanelProps {
 
 export function ReadingPlansPanel({ onClose, theme }: ReadingPlansPanelProps) {
   const { activePlan, setActivePlan } = useUserDataStore();
+  const tr = useT();
+  const fs = useFontScale();
 
   return (
     <div style={{
@@ -28,14 +41,14 @@ export function ReadingPlansPanel({ onClose, theme }: ReadingPlansPanelProps) {
         borderBottom: `1px solid ${theme.border}`,
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
       }}>
-        <span style={{ fontSize: 15, fontWeight: 600, color: theme.text }}>Plans de lecture</span>
+        <span style={{ fontSize: fs(15), fontWeight: 600, color: theme.text }}>{tr('plans.title')}</span>
         <button
           onClick={onClose}
           style={{
             background: 'none', border: 'none', cursor: 'pointer',
-            fontSize: 14, color: theme.textMuted, fontFamily: 'inherit',
+            fontSize: fs(14), color: theme.textMuted, fontFamily: 'inherit',
           }}
-        >Fermer</button>
+        >{tr('plans.close')}</button>
       </div>
       <div style={{ flex: 1, overflow: 'auto', padding: 12 }}>
         {READING_PLANS.map(plan => {
@@ -52,15 +65,17 @@ export function ReadingPlansPanel({ onClose, theme }: ReadingPlansPanelProps) {
                 cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
               }}
             >
-              <div style={{ fontSize: 15, fontWeight: 600, color: theme.text }}>{plan.name}</div>
-              <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 4 }}>
-                {plan.days} jours &middot; {plan.pericopes.length || 'toutes les'} sections
+              <div style={{ fontSize: fs(15), fontWeight: 600, color: theme.text }}>
+                {tr(PLAN_NAME_KEY[plan.id] ?? 'plans.fullReading')}
+              </div>
+              <div style={{ fontSize: fs(12), color: theme.textMuted, marginTop: 4 }}>
+                {plan.days} {tr('plans.days')} &middot; {plan.pericopes.length || tr('plans.allSections')} {tr('plans.sections')}
               </div>
               {isActive && (
                 <div style={{
-                  marginTop: 8, fontSize: 11, color: theme.gospelColors.LC, fontWeight: 600,
+                  marginTop: 8, fontSize: fs(11), color: theme.gospelColors.LC, fontWeight: 600,
                 }}>
-                  Plan actif
+                  {tr('plans.active')}
                 </div>
               )}
             </button>

@@ -5,6 +5,7 @@ import { useUserDataStore } from './stores/userDataStore';
 import { useTheme } from './lib/theme';
 import { GOSPEL_KEYS, type GospelKey } from './lib/types';
 import { useSystemFontBase } from './hooks/useSystemFontBase';
+import { useT } from './lib/i18n';
 
 import { TopChrome } from './components/TopChrome';
 import { VerseGrid, type VerseGridHandle } from './components/VerseGrid';
@@ -15,6 +16,7 @@ import { BookmarksPanel } from './components/BookmarksPanel';
 import { ReadingPlansPanel } from './components/ReadingPlansPanel';
 import { Sidebar } from './components/Sidebar';
 import { SettingsPanel } from './components/SettingsPanel';
+import { GospelXray } from './components/GospelXray';
 
 import './index.css';
 
@@ -33,6 +35,7 @@ function App() {
   const { loadTranslation, rows, isLoading, findRowByRef } = useDataStore();
   const { loadAll: loadUserData, addBookmark, bookmarks, removeBookmark } = useUserDataStore();
   const theme = useTheme(isDarkMode);
+  const tr = useT();
   const gridRef = useRef<VerseGridHandle>(null);
 
   useSystemFontBase();
@@ -111,7 +114,7 @@ function App() {
       >
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: 24, marginBottom: 8 }}>&#10022;</div>
-          <div style={{ fontSize: 14, color: theme.textMuted }}>Chargement...</div>
+          <div style={{ fontSize: 14, color: theme.textMuted }}>{tr('app.loading')}</div>
         </div>
       </div>
     );
@@ -129,6 +132,7 @@ function App() {
         color: theme.text,
       }}
     >
+      <GospelXray theme={theme} onGoToRow={scrollToRow} />
       <Sidebar theme={theme} onGoToRow={scrollToRow} />
 
       <div

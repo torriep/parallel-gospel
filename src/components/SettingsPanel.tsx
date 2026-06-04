@@ -4,6 +4,8 @@ import { useDataStore } from '../stores/dataStore';
 import { TRANSLATIONS } from '../lib/types';
 import type { Theme } from '../lib/theme';
 import { useWidthClass } from '../hooks/useMediaQuery';
+import { useFontScale } from '../hooks/useFontScale';
+import { useT } from '../lib/i18n';
 import {
   CloseIcon, DiffIcon, EyeOffIcon, EyeShowIcon, MinusIcon, MoonIcon, PlusIcon, SunIcon,
 } from './icons';
@@ -14,6 +16,8 @@ interface SettingsPanelProps {
 }
 
 export function SettingsPanel({ theme, onClose }: SettingsPanelProps) {
+  const tr = useT();
+  const fs = useFontScale();
   const widthClass = useWidthClass();
   const isCompact = widthClass === 'compact';
 
@@ -46,19 +50,19 @@ export function SettingsPanel({ theme, onClose }: SettingsPanelProps) {
   const content = (
     <>
       {/* Display block */}
-      <SectionTitle theme={theme}>Affichage</SectionTitle>
+      <SectionTitle theme={theme}>{tr('settings.display')}</SectionTitle>
       <div style={{ display: 'flex', gap: 8, padding: '0 16px 12px', flexWrap: 'wrap' }}>
         <SegBtn theme={theme} active={showDifferences} onClick={toggleDifferences}>
           <DiffIcon size={18} color={showDifferences ? theme.gospelColors.MT : theme.textMuted} />
-          <span>Parallèles</span>
+          <span>{tr('settings.parallels')}</span>
         </SegBtn>
         <SegBtn theme={theme} active={isDarkMode} onClick={toggleDarkMode}>
           {isDarkMode ? <SunIcon size={18} color={theme.text} /> : <MoonIcon size={18} color={theme.text} />}
-          <span>{isDarkMode ? 'Mode jour' : 'Mode nuit'}</span>
+          <span>{isDarkMode ? tr('settings.dayMode') : tr('settings.nightMode')}</span>
         </SegBtn>
       </div>
 
-      <SectionTitle theme={theme}>Taille du texte</SectionTitle>
+      <SectionTitle theme={theme}>{tr('settings.textSize')}</SectionTitle>
       <div
         style={{
           display: 'flex',
@@ -70,13 +74,13 @@ export function SettingsPanel({ theme, onClose }: SettingsPanelProps) {
         <button
           onClick={() => setFontDelta(fontDelta - 1)}
           style={roundBtn(theme)}
-          aria-label="Diminuer"
+          aria-label={tr('settings.decrease')}
         >
           <MinusIcon size={18} color={theme.text} />
         </button>
         <div style={{ flex: 1, textAlign: 'center' }}>
-          <div style={{ fontSize: 13, color: theme.textMuted, marginBottom: 2 }}>
-            Base système {systemFontBase}pt {fontDelta > 0 ? '+' : ''}{fontDelta !== 0 ? fontDelta : ''}
+          <div style={{ fontSize: fs(13), color: theme.textMuted, marginBottom: 2 }}>
+            {tr('settings.systemBase')} {systemFontBase}pt {fontDelta > 0 ? '+' : ''}{fontDelta !== 0 ? fontDelta : ''}
           </div>
           <div style={{ fontSize: systemFontBase + fontDelta, color: theme.text, lineHeight: 1.2 }}>
             Aa
@@ -85,24 +89,24 @@ export function SettingsPanel({ theme, onClose }: SettingsPanelProps) {
         <button
           onClick={() => setFontDelta(fontDelta + 1)}
           style={roundBtn(theme)}
-          aria-label="Augmenter"
+          aria-label={tr('settings.increase')}
         >
           <PlusIcon size={18} color={theme.text} />
         </button>
       </div>
 
-      <SectionTitle theme={theme}>Traduction principale</SectionTitle>
+      <SectionTitle theme={theme}>{tr('settings.primaryTranslation')}</SectionTitle>
       <div style={{ padding: '0 8px 8px' }}>
         {TRANSLATIONS.map(t => (
           <button
             key={t.code}
             onClick={() => handlePrimary(t.code)}
-            style={rowBtn(theme, translationCode === t.code)}
+            style={{ ...rowBtn(theme, translationCode === t.code), fontSize: fs(14) }}
           >
             <EyeShowIcon size={16} color={translationCode === t.code ? theme.text : theme.textFaint} />
             <span style={{ flex: 1 }}>
               {t.name}
-              <span style={{ fontSize: 11, marginLeft: 6, color: theme.textFaint }}>{t.language}</span>
+              <span style={{ fontSize: fs(11), marginLeft: 6, color: theme.textFaint }}>{t.language}</span>
             </span>
             {translationCode === t.code && (
               <span style={{ color: theme.gospelColors.LC, fontWeight: 700 }}>✓</span>
@@ -111,14 +115,14 @@ export function SettingsPanel({ theme, onClose }: SettingsPanelProps) {
         ))}
       </div>
 
-      <SectionTitle theme={theme}>Traduction comparative</SectionTitle>
+      <SectionTitle theme={theme}>{tr('settings.comparativeTranslation')}</SectionTitle>
       <div style={{ padding: '0 8px 16px' }}>
         <button
           onClick={() => handleSecondary(null)}
-          style={rowBtn(theme, !secondaryTranslation)}
+          style={{ ...rowBtn(theme, !secondaryTranslation), fontSize: fs(14) }}
         >
           <EyeOffIcon size={16} color={!secondaryTranslation ? theme.text : theme.textFaint} />
-          <span style={{ flex: 1 }}>Aucune</span>
+          <span style={{ flex: 1 }}>{tr('settings.none')}</span>
           {!secondaryTranslation && (
             <span style={{ color: theme.gospelColors.LC, fontWeight: 700 }}>✓</span>
           )}
@@ -127,12 +131,12 @@ export function SettingsPanel({ theme, onClose }: SettingsPanelProps) {
           <button
             key={t.code}
             onClick={() => handleSecondary(t.code)}
-            style={rowBtn(theme, secondaryTranslation === t.code)}
+            style={{ ...rowBtn(theme, secondaryTranslation === t.code), fontSize: fs(14) }}
           >
             <EyeShowIcon size={16} color={secondaryTranslation === t.code ? theme.text : theme.textFaint} />
             <span style={{ flex: 1 }}>
               {t.name}
-              <span style={{ fontSize: 11, marginLeft: 6, color: theme.textFaint }}>{t.language}</span>
+              <span style={{ fontSize: fs(11), marginLeft: 6, color: theme.textFaint }}>{t.language}</span>
             </span>
             {secondaryTranslation === t.code && (
               <span style={{ color: theme.gospelColors.LC, fontWeight: 700 }}>✓</span>
@@ -184,7 +188,7 @@ export function SettingsPanel({ theme, onClose }: SettingsPanelProps) {
               padding: '4px 16px 8px',
             }}
           >
-            <span style={{ fontSize: 17, fontWeight: 700, color: theme.text }}>Réglages</span>
+            <span style={{ fontSize: fs(17), fontWeight: 700, color: theme.text }}>{tr('settings.title')}</span>
             <button
               onClick={onClose}
               style={{
@@ -192,7 +196,7 @@ export function SettingsPanel({ theme, onClose }: SettingsPanelProps) {
                 minWidth: 44, minHeight: 44,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}
-              aria-label="Fermer"
+              aria-label={tr('sidebar.close')}
             >
               <CloseIcon size={20} color={theme.textMuted} />
             </button>
@@ -229,7 +233,7 @@ export function SettingsPanel({ theme, onClose }: SettingsPanelProps) {
           borderBottom: `0.5px solid ${theme.borderLight}`,
         }}
       >
-        <span style={{ fontSize: 16, fontWeight: 700, color: theme.text }}>Réglages</span>
+        <span style={{ fontSize: fs(16), fontWeight: 700, color: theme.text }}>{tr('settings.title')}</span>
         <button
           onClick={onClose}
           style={{
@@ -237,7 +241,7 @@ export function SettingsPanel({ theme, onClose }: SettingsPanelProps) {
             minWidth: 32, minHeight: 32,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}
-          aria-label="Fermer"
+          aria-label={tr('sidebar.close')}
         >
           <CloseIcon size={18} color={theme.textMuted} />
         </button>
@@ -248,11 +252,12 @@ export function SettingsPanel({ theme, onClose }: SettingsPanelProps) {
 }
 
 function SectionTitle({ theme, children }: { theme: Theme; children: React.ReactNode }) {
+  const fs = useFontScale();
   return (
     <div
       style={{
         padding: '12px 16px 6px',
-        fontSize: 11,
+        fontSize: fs(11),
         fontWeight: 700,
         textTransform: 'uppercase',
         letterSpacing: 1,
@@ -268,6 +273,7 @@ function SegBtn(
   { theme, active, onClick, children }:
   { theme: Theme; active: boolean; onClick: () => void; children: React.ReactNode }
 ) {
+  const fs = useFontScale();
   return (
     <button
       onClick={onClick}
@@ -283,7 +289,7 @@ function SegBtn(
         borderRadius: 10,
         cursor: 'pointer',
         color: theme.text,
-        fontSize: 14,
+        fontSize: fs(14),
         fontFamily: 'inherit',
         flex: 1,
         justifyContent: 'center',

@@ -2,12 +2,24 @@ import { useState, useMemo } from 'react';
 import { useDataStore } from '../stores/dataStore';
 import { useUserDataStore } from '../stores/userDataStore';
 import { useAppStore } from '../stores/appStore';
-import { GOSPEL_KEYS, GOSPEL_NAMES, GOSPEL_MONOGRAMS, HIGHLIGHT_COLORS, type GospelKey } from '../lib/types';
+import { GOSPEL_KEYS, GOSPEL_MONOGRAMS, HIGHLIGHT_COLORS, type GospelKey } from '../lib/types';
 import type { Theme } from '../lib/theme';
 import { useWidthClass } from '../hooks/useMediaQuery';
+import { useFontScale } from '../hooks/useFontScale';
+import { useLanguage, useT, type StringKey } from '../lib/i18n';
 import {
   BookmarkFilledIcon, BookmarkIcon, CloseIcon, HighlightIcon, PlusIcon,
 } from './icons';
+
+// HIGHLIGHT_COLORS is positional (Yellow / Green / Blue / Pink / Purple).
+// Map by index to the matching dictionary key for the aria-label and title.
+const HIGHLIGHT_COLOR_KEYS: StringKey[] = [
+  'color.yellow',
+  'color.green',
+  'color.blue',
+  'color.pink',
+  'color.purple',
+];
 
 interface FocusCardProps {
   rowId: number;
@@ -33,6 +45,10 @@ export function FocusCard({ rowId, onClose, theme }: FocusCardProps) {
 
   const [noteText, setNoteText] = useState('');
   const [showHighlightPicker, setShowHighlightPicker] = useState<GospelKey | null>(null);
+  const tr = useT();
+  const fs = useFontScale();
+  const language = useLanguage();
+  const dateLocale = language === 'fr' ? 'fr-FR' : 'en-US';
 
   const row = useMemo(() => rows.find(r => r.id === rowId), [rows, rowId]);
   if (!row) return null;
@@ -63,7 +79,7 @@ export function FocusCard({ rowId, onClose, theme }: FocusCardProps) {
         .filter(k => row[k])
         .map(k => `${GOSPEL_MONOGRAMS[k]} ${row[k]!.ref.replace(/[A-Z]/g, '').replace('.', ':')}`)
         .join(' · ');
-      addBookmark(rowId, refs || `Rang ${rowId}`);
+      addBookmark(rowId, refs || `${tr('focus.row')} ${rowId}`);
     }
   };
 
@@ -78,8 +94,8 @@ export function FocusCard({ rowId, onClose, theme }: FocusCardProps) {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: theme.text }}>
-            Parallèle
+          <span style={{ fontSize: fs(15), fontWeight: 700, color: theme.text }}>
+            {tr('focus.parallel')}
           </span>
           <span
             style={{
@@ -92,13 +108,13 @@ export function FocusCard({ rowId, onClose, theme }: FocusCardProps) {
               padding: '1px 8px',
             }}
           >
-            {presentCount}/4 évangiles
+            {presentCount}/4 {tr('focus.gospelCount')}
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           <button
             onClick={handleToggleBookmark}
-            aria-label={bookmark ? 'Retirer le signet' : 'Ajouter un signet'}
+            aria-label={bookmark ? tr('focus.removeBookmark') : tr('focus.addBookmark')}
             style={iconBtn(theme)}
           >
             {bookmark
@@ -108,7 +124,7 @@ export function FocusCard({ rowId, onClose, theme }: FocusCardProps) {
           </button>
           <button
             onClick={onClose}
-            aria-label="Fermer"
+            aria-label={tr('focus.close')}
             style={iconBtn(theme)}
           >
             <CloseIcon size={20} color={theme.textMuted} />
@@ -165,11 +181,11 @@ export function FocusCard({ rowId, onClose, theme }: FocusCardProps) {
                   >
                     {GOSPEL_MONOGRAMS[key]}
                   </span>
-                  <span style={{ fontSize: 14, fontWeight: 700, color }}>
-                    {GOSPEL_NAMES[key]}
+                  <span style={{ fontSize: fs(14), fontWeight: 700, color }}>
+                    {tr(`gospel.${key}` as const)}
                   </span>
                   {present && verse && (
-                    <span style={{ fontSize: 12, color: theme.textMuted, fontVariantNumeric: 'tabular-nums' }}>
+                    <span style={{ fontSize: fs(12), color: theme.textMuted, fontVariantNumeric: 'tabular-nums' }}>
                       {verse.ref.replace(/[A-Z]/g, '').replace('.', ':')}
                     </span>
                   )}
@@ -186,7 +202,7 @@ export function FocusCard({ rowId, onClose, theme }: FocusCardProps) {
                         letterSpacing: 0.3,
                       }}
                     >
-                      absent
+                      {tr('focus.absent')}
                     </span>
                   )}
                 </div>
@@ -194,7 +210,7 @@ export function FocusCard({ rowId, onClose, theme }: FocusCardProps) {
                 {present && (
                   <button
                     onClick={() => setShowHighlightPicker(showHighlightPicker === key ? null : key)}
-                    aria-label="Surligner"
+                    aria-label={tr('focus.highlight')}
                     style={iconBtn(theme)}
                   >
                     <HighlightIcon size={18} color={verseHighlight ? color : theme.textMuted} />
@@ -204,31 +220,34 @@ export function FocusCard({ rowId, onClose, theme }: FocusCardProps) {
 
               {showHighlightPicker === key && verse && (
                 <div style={{ display: 'flex', gap: 8, marginBottom: 10, paddingBottom: 8, flexWrap: 'wrap' }}>
-                  {HIGHLIGHT_COLORS.map(h => (
-                    <button
-                      key={h.name}
-                      onClick={() => handleHighlight(verse.ref, h.color)}
-                      style={{
-                        width: 32, height: 32, borderRadius: '50%',
-                        border: `2px solid ${theme.border}`,
-                        background: h.color, cursor: 'pointer',
-                        flexShrink: 0,
-                      }}
-                      title={h.name}
-                      aria-label={h.name}
-                    />
-                  ))}
+                  {HIGHLIGHT_COLORS.map((h, idx) => {
+                    const colorName = tr(HIGHLIGHT_COLOR_KEYS[idx] ?? 'color.yellow');
+                    return (
+                      <button
+                        key={h.name}
+                        onClick={() => handleHighlight(verse.ref, h.color)}
+                        style={{
+                          width: 32, height: 32, borderRadius: '50%',
+                          border: `2px solid ${theme.border}`,
+                          background: h.color, cursor: 'pointer',
+                          flexShrink: 0,
+                        }}
+                        title={colorName}
+                        aria-label={colorName}
+                      />
+                    );
+                  })}
                   {verseHighlight && (
                     <button
                       onClick={() => handleHighlight(verse.ref, null)}
                       style={{
-                        fontSize: 12, color: theme.textMuted, background: 'transparent',
+                        fontSize: fs(12), color: theme.textMuted, background: 'transparent',
                         border: `0.5px solid ${theme.border}`, borderRadius: 14, padding: '4px 12px',
                         cursor: 'pointer', fontFamily: 'inherit',
                         minHeight: 32,
                       }}
                     >
-                      Effacer
+                      {tr('focus.clear')}
                     </button>
                   )}
                 </div>
@@ -245,7 +264,7 @@ export function FocusCard({ rowId, onClose, theme }: FocusCardProps) {
                     margin: 0, fontStyle: 'italic',
                   }}
                 >
-                  Aucun parallèle de {GOSPEL_NAMES[key]} à ce rang.
+                  {tr('focus.noParallel')} {tr(`gospel.${key}` as const)} {tr('focus.atThisRow')}
                 </p>
               )}
 
@@ -271,30 +290,30 @@ export function FocusCard({ rowId, onClose, theme }: FocusCardProps) {
         >
           <span
             style={{
-              fontSize: 11, fontWeight: 700, color: theme.textFaint,
+              fontSize: fs(11), fontWeight: 700, color: theme.textFaint,
               display: 'block', marginBottom: 8,
               textTransform: 'uppercase', letterSpacing: 1,
             }}
           >
-            Notes personnelles
+            {tr('focus.notes')}
           </span>
           {rowNotes.map(n => (
             <div
               key={n.id}
               style={{
-                fontSize: 13, color: theme.text, padding: '8px 0',
+                fontSize: fs(13), color: theme.text, padding: '8px 0',
                 borderBottom: `0.5px solid ${theme.borderLight}`,
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8,
               }}
             >
               <span style={{ flex: 1 }}>{n.text}</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 10, color: theme.textFaint }}>
-                  {new Date(n.createdAt).toLocaleDateString('fr-FR')}
+                <span style={{ fontSize: fs(10), color: theme.textFaint }}>
+                  {new Date(n.createdAt).toLocaleDateString(dateLocale)}
                 </span>
                 <button
                   onClick={() => n.id != null && deleteNote(n.id)}
-                  aria-label="Supprimer"
+                  aria-label={tr('focus.delete')}
                   style={{
                     background: 'none', border: 'none', cursor: 'pointer',
                     minWidth: 32, minHeight: 32,
@@ -311,18 +330,18 @@ export function FocusCard({ rowId, onClose, theme }: FocusCardProps) {
               value={noteText}
               onChange={e => setNoteText(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleAddNote()}
-              placeholder="Ajouter une note..."
+              placeholder={tr('focus.notePlaceholder')}
               style={{
                 flex: 1, padding: '10px 12px',
                 border: `0.5px solid ${theme.border}`,
                 borderRadius: 10, background: theme.card, color: theme.text,
-                fontSize: 14, fontFamily: 'inherit', outline: 'none',
+                fontSize: fs(14), fontFamily: 'inherit', outline: 'none',
                 minHeight: 44,
               }}
             />
             <button
               onClick={handleAddNote}
-              aria-label="Ajouter"
+              aria-label={tr('focus.add')}
               style={{
                 minWidth: 44, minHeight: 44,
                 background: theme.gospelColors.LC, border: 'none',
