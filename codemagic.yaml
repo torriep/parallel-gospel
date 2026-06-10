@@ -11,6 +11,8 @@ workflows:
         XCODE_SCHEME: "App"
         APP_STORE_APPLE_ID: 6762166162
         BUNDLE_ID: "com.pierreroberge.parallelgospel"
+      groups:
+        - iOS_signing            # holds CERTIFICATE_PRIVATE_KEY (persistent signing key)
       node: 22
       xcode: latest
       cocoapods: default
@@ -43,21 +45,15 @@ workflows:
       - name: Set up signing
         script: |
           set -e
-          # Generate a fresh private key just for this build
-          openssl genrsa -out /tmp/cm-private-key 2048
-
           keychain initialize
 
-          # Create a NEW cert on Apple's side bound to our private key
-          app-store-connect certificates create \
-            --type IOS_DISTRIBUTION \
-            --certificate-key=@file:/tmp/cm-private-key \
-            --save
-
-          # Now fetch profiles (cert exists now, so this works)
+          # Reuse ONE persistent signing key (stored as the CERTIFICATE_PRIVATE_KEY
+          # env var). On the first build this creates a single distribution cert
+          # bound to that key; every later build finds and reuses it — so we never
+          # accumulate certs and hit Apple's distribution-cert cap again.
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
-            --certificate-key=@file:/tmp/cm-private-key \
+            --certificate-key "$CERTIFICATE_PRIVATE_KEY" \
             --create
 
           keychain add-certificates
