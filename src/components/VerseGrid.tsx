@@ -24,6 +24,7 @@ export const VerseGrid = forwardRef<VerseGridHandle, VerseGridProps>(function Ve
   const pericopes = useDataStore(s => s.pericopes);
   const highlightedRowId = useAppStore(s => s.highlightedRowId);
   const setCurrentRowId = useAppStore(s => s.setCurrentRowId);
+  const setVisibleRange = useAppStore(s => s.setVisibleRange);
 
   const [scrollParent, setScrollParent] = useState<HTMLDivElement | null>(null);
   const onScrollParentRef = useCallback((el: HTMLDivElement | null) => setScrollParent(el), []);
@@ -119,8 +120,55 @@ export const VerseGrid = forwardRef<VerseGridHandle, VerseGridProps>(function Ve
   const setCurrentRowIdRef = useRef(setCurrentRowId);
   setCurrentRowIdRef.current = setCurrentRowId;
 
+  // Separate, full-viewport observer that tracks EVERY row currently on screen
+  // (not just the top sliver the scroll-spy uses). Its min/max drive the
+  // GospelXray "you-are-here" band, so the band always covers exactly what is
+  // visible — independent of the laggier currentRowId scroll-spy.
+  const rangeObserverRef = useRef<IntersectionObserver | null>(null);
+  const rangeVisibleRef = useRef<Set<number>>(new Set());
+  const setVisibleRangeRef = useRef(setVisibleRange);
+  setVisibleRangeRef.current = setVisibleRange;
+  const rangeFlushRaf = useRef<number | null>(null);
+  const flushVisibleRange = useCallback(() => {
+    if (rangeFlushRaf.current != null) return;
+    rangeFlushRaf.current = requestAnimationFrame(() => {
+      rangeFlushRaf.current = null;
+      const set = rangeVisibleRef.current;
+      if (set.size === 0) {
+        setVisibleRangeRef.current(null, null);
+        return;
+      }
+      let min = Infinity;
+      let max = -Infinity;
+      set.forEach(id => {
+        if (id < min) min = id;
+        if (id > max) max = id;
+      });
+      setVisibleRangeRef.current(min, max);
+    });
+  }, []);
+
   const observeCell = useCallback((el: HTMLElement | null) => {
     if (!el) return;
+    if (!rangeObserverRef.current) {
+      const root =
+        (el.closest('[data-grid-scroller]') as HTMLElement | null) ?? null;
+      if (root) {
+        rangeObserverRef.current = new IntersectionObserver(
+          entries => {
+            for (const entry of entries) {
+              const id = parseInt((entry.target as HTMLElement).dataset.rowId ?? '', 10);
+              if (isNaN(id)) continue;
+              if (entry.isIntersecting) rangeVisibleRef.current.add(id);
+              else rangeVisibleRef.current.delete(id);
+            }
+            flushVisibleRange();
+          },
+          { root, threshold: 0 }
+        );
+      }
+    }
+    rangeObserverRef.current?.observe(el);
     if (!observerRef.current) {
       const root =
         (el.closest('[data-grid-scroller]') as HTMLElement | null) ?? null;
@@ -151,10 +199,15 @@ export const VerseGrid = forwardRef<VerseGridHandle, VerseGridProps>(function Ve
     observerRef.current.observe(el);
     return () => {
       observerRef.current?.unobserve(el);
+      rangeObserverRef.current?.unobserve(el);
       const id = parseInt(el.dataset.rowId ?? '', 10);
-      if (!isNaN(id)) visibleRowsRef.current.delete(id);
+      if (!isNaN(id)) {
+        visibleRowsRef.current.delete(id);
+        rangeVisibleRef.current.delete(id);
+        flushVisibleRange();
+      }
     };
-  }, []);
+  }, [flushVisibleRange]);
 
   // Two-step scrollToRow: virtuoso jumps to the containing chunk, then we land precisely on the row.
   useImperativeHandle(

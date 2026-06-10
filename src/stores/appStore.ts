@@ -22,6 +22,12 @@ interface AppState {
   focusRowId: number | null;
   highlightedRowId: number | null;
   currentRowId: number;
+  // First/last row ids currently within the reading viewport. Drives the
+  // GospelXray "you-are-here" band so it shows exactly what is on screen.
+  // Tracked separately from currentRowId (which is a single top-of-viewport
+  // scroll-spy value used for the sidebar highlight).
+  visibleFirstRowId: number | null;
+  visibleLastRowId: number | null;
   currentRefs: Record<GospelKey, string | null>;
 
   // Actions
@@ -42,6 +48,7 @@ interface AppState {
   setFocusRowId: (id: number | null) => void;
   setHighlightedRowId: (id: number | null) => void;
   setCurrentRowId: (id: number) => void;
+  setVisibleRange: (first: number | null, last: number | null) => void;
   setCurrentRefs: (refs: Record<GospelKey, string | null>) => void;
   loadSettings: () => Promise<void>;
 }
@@ -66,6 +73,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   focusRowId: null,
   highlightedRowId: null,
   currentRowId: 1,
+  visibleFirstRowId: null,
+  visibleLastRowId: null,
   currentRefs: { MT: null, MC: null, LC: null, JN: null },
 
   toggleDarkMode: () => {
@@ -99,6 +108,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   setFocusRowId: (id) => set({ focusRowId: id }),
   setHighlightedRowId: (id) => set({ highlightedRowId: id }),
   setCurrentRowId: (id) => set({ currentRowId: id }),
+  setVisibleRange: (first, last) => set(s =>
+    s.visibleFirstRowId === first && s.visibleLastRowId === last
+      ? s
+      : { visibleFirstRowId: first, visibleLastRowId: last }
+  ),
   setCurrentRefs: (refs) => set({ currentRefs: refs }),
 
   loadSettings: async () => {

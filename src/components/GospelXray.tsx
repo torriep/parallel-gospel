@@ -25,6 +25,8 @@ interface GospelXrayProps {
 export function GospelXray({ theme, onGoToRow }: GospelXrayProps) {
   const rows = useDataStore(s => s.rows);
   const currentRowId = useAppStore(s => s.currentRowId);
+  const visibleFirstRowId = useAppStore(s => s.visibleFirstRowId);
+  const visibleLastRowId = useAppStore(s => s.visibleLastRowId);
   const widthClass = useWidthClass();
   const tr = useT();
 
@@ -177,8 +179,25 @@ export function GospelXray({ theme, onGoToRow }: GospelXrayProps) {
 
   if (widthClass === 'compact' || n === 0) return null;
 
+  const fracOf = (rowId: number | null) =>
+    n > 1 && rowId != null && idToIndex.has(rowId)
+      ? (idToIndex.get(rowId) as number) / (n - 1)
+      : null;
+
   const currentFrac = n > 1 ? (idToIndex.get(currentRowId) ?? 0) / (n - 1) : 0;
-  const markerFrac = scrubFrac !== null ? scrubFrac : currentFrac;
+
+  // The "you-are-here" band spans the rows actually on screen (first→last
+  // visible). Falls back to a point at currentRowId before the viewport has
+  // reported a range. While scrubbing, the band collapses to the drag point.
+  const firstFrac = fracOf(visibleFirstRowId);
+  const lastFrac = fracOf(visibleLastRowId);
+  const haveRange = firstFrac !== null && lastFrac !== null;
+  const bandTop = scrubFrac !== null
+    ? scrubFrac
+    : haveRange ? Math.min(firstFrac!, lastFrac!) : currentFrac;
+  const bandBottom = scrubFrac !== null
+    ? scrubFrac
+    : haveRange ? Math.max(firstFrac!, lastFrac!) : currentFrac;
 
   return (
     <div
@@ -201,7 +220,7 @@ export function GospelXray({ theme, onGoToRow }: GospelXrayProps) {
         aria-orientation="vertical"
         aria-valuemin={0}
         aria-valuemax={100}
-        aria-valuenow={Math.round(markerFrac * 100)}
+        aria-valuenow={Math.round(((bandTop + bandBottom) / 2) * 100)}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={endScrub}
@@ -217,38 +236,26 @@ export function GospelXray({ theme, onGoToRow }: GospelXrayProps) {
       >
         {lanesSvg}
 
-        {/* You-are-here marker (or scrub preview while dragging) */}
+        {/* You-are-here band: a rectangle covering the rows currently on screen
+            (or a thin preview line while scrubbing). */}
         <div
           style={{
             position: 'absolute',
             left: 0,
             right: 0,
-            top: `${markerFrac * 100}%`,
-            transform: 'translateY(-50%)',
+            top: `${bandTop * 100}%`,
+            height: `${Math.max(0, bandBottom - bandTop) * 100}%`,
+            minHeight: scrubFrac !== null ? 2 : 10,
+            transform: scrubFrac !== null ? 'translateY(-1px)' : undefined,
+            boxSizing: 'border-box',
+            background: scrubFrac !== null ? 'transparent' : `${theme.text}26`,
+            border: `1.5px solid ${theme.text}`,
+            borderRadius: 2,
+            boxShadow: `0 0 0 0.5px ${theme.bg}`,
+            opacity: scrubFrac !== null ? 1 : 0.9,
             pointerEvents: 'none',
           }}
-        >
-          <div
-            style={{
-              height: 2,
-              background: theme.text,
-              opacity: scrubFrac !== null ? 1 : 0.85,
-              boxShadow: `0 0 0 0.5px ${theme.bg}`,
-            }}
-          />
-          <div
-            style={{
-              position: 'absolute',
-              left: -1,
-              top: -3,
-              width: 5,
-              height: 8,
-              borderRadius: 2,
-              background: theme.text,
-              boxShadow: `0 0 0 0.5px ${theme.bg}`,
-            }}
-          />
-        </div>
+        />
       </div>
     </div>
   );
