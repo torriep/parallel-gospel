@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, useCallback, useEffect } from 'react';
+import { useMemo, useRef, useState, useCallback } from 'react';
 import { useDataStore } from '../stores/dataStore';
 import { useAppStore } from '../stores/appStore';
 import { GOSPEL_KEYS, TIMELINE_PHASES } from '../lib/types';
@@ -25,24 +25,20 @@ interface GospelXrayProps {
 export function GospelXray({ theme, onGoToRow }: GospelXrayProps) {
   const rows = useDataStore(s => s.rows);
   const currentRowId = useAppStore(s => s.currentRowId);
-  const visibleFirstRowId = useAppStore(s => s.visibleFirstRowId);
-  const visibleLastRowId = useAppStore(s => s.visibleLastRowId);
   const widthClass = useWidthClass();
   const tr = useT();
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const [scrubFrac, setScrubFrac] = useState<number | null>(null);
-  // Mirror of scrubFrac for synchronous reads inside event handlers.
-  const scrubFracRef = useRef<number | null>(null);
-  const setScrub = useCallback((v: number | null) => {
-    scrubFracRef.current = v;
-    setScrubFrac(v);
+  // ONE-WAY control: the band's position is set ONLY by tapping/dragging the
+  // strip. Scrolling the verses never moves or resizes it. null until the
+  // first interaction (then it falls back to the current reading position).
+  const [markerFrac, setMarkerFrac] = useState<number | null>(null);
+  const markerFracRef = useRef<number | null>(null);
+  const setMarker = useCallback((v: number) => {
+    markerFracRef.current = v;
+    setMarkerFrac(v);
   }, []);
-  // After a tap/drag navigation we keep the band pinned at the tapped point
-  // until the reading view reports its new visible range — so the band lands
-  // once, cleanly, instead of sliding while the list settles.
-  const awaitingNavRef = useRef(false);
-  const clearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const draggingRef = useRef(false);
 
   // Per-bucket verse density for each gospel + a row-id → index lookup. Heavy,
   // so memoized on `rows` only (does NOT recompute as you scroll/read).
@@ -150,112 +146,58 @@ export function GospelXray({ theme, onGoToRow }: GospelXrayProps) {
     if (rowId != null) onGoToRow(rowId, { instant });
   }, [n, rows, onGoToRow]);
 
-  const fracOfId = useCallback((id: number | null) =>
-    n > 1 && id != null && idToIndex.has(id)
-      ? (idToIndex.get(id) as number) / (n - 1)
-      : null,
-  [n, idToIndex]);
+  // Move the band to a position and scroll the verses there (instantly).
+  const goTo = useCallback((frac: number) => {
+    const f = Math.min(1, Math.max(0, frac));
+    setMarker(f);
+    navToFrac(f, true);
+  }, [setMarker, navToFrac]);
 
-  // After a tap we pin the band at the tapped point and hand off to the live
-  // range ONLY once the viewport has actually scrolled to that area — so the
-  // band never flashes the old position or slides into place.
-  useEffect(() => {
-    if (!awaitingNavRef.current) return;
-    const f = scrubFracRef.current;
-    if (f === null) { awaitingNavRef.current = false; return; }
-    const a = fracOfId(visibleFirstRowId);
-    const b = fracOfId(visibleLastRowId);
-    if (a === null || b === null) return;
-    const margin = 0.02;
-    if (f >= Math.min(a, b) - margin && f <= Math.max(a, b) + margin) {
-      awaitingNavRef.current = false;
-      if (clearTimerRef.current) { clearTimeout(clearTimerRef.current); clearTimerRef.current = null; }
-      setScrub(null);
-    }
-  }, [visibleFirstRowId, visibleLastRowId, fracOfId, setScrub]);
-
-  // Press/drag moves the band to the pointer; navigation commits on release.
+  // Press/drag moves the band to the pointer; release commits the scroll.
   const onPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     e.currentTarget.setPointerCapture(e.pointerId);
-    if (clearTimerRef.current) { clearTimeout(clearTimerRef.current); clearTimerRef.current = null; }
-    awaitingNavRef.current = false;
-    setScrub(fracFromClientY(e.clientY));
-  }, [fracFromClientY, setScrub]);
+    draggingRef.current = true;
+    setMarker(fracFromClientY(e.clientY));
+  }, [fracFromClientY, setMarker]);
 
   const onPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    if (scrubFracRef.current === null) return;
-    setScrub(fracFromClientY(e.clientY));
-  }, [fracFromClientY, setScrub]);
+    if (!draggingRef.current) return;
+    setMarker(fracFromClientY(e.clientY));
+  }, [fracFromClientY, setMarker]);
 
   const endScrub = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    const frac = scrubFracRef.current;
+    if (!draggingRef.current) return;
+    draggingRef.current = false;
     try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* noop */ }
-    if (frac === null) return;
-    // Already showing this area? Nothing to navigate — just drop the pin.
-    const st = useAppStore.getState();
-    const a = fracOfId(st.visibleFirstRowId);
-    const b = fracOfId(st.visibleLastRowId);
-    if (a !== null && b !== null && frac >= Math.min(a, b) - 0.02 && frac <= Math.max(a, b) + 0.02) {
-      setScrub(null);
-      return;
-    }
-    // Otherwise jump instantly; keep the band pinned at the tap until the
-    // viewport reaches it (handed off by the effect above; safety net here).
-    awaitingNavRef.current = true;
-    navToFrac(frac, true);
-    if (clearTimerRef.current) clearTimeout(clearTimerRef.current);
-    clearTimerRef.current = setTimeout(() => {
-      awaitingNavRef.current = false;
-      clearTimerRef.current = null;
-      setScrub(null);
-    }, 1200);
-  }, [navToFrac, setScrub, fracOfId]);
+    goTo(fracFromClientY(e.clientY));
+  }, [fracFromClientY, goTo]);
 
   const onKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
     if (n === 0) return;
-    const curIdx = idToIndex.get(currentRowId) ?? 0;
+    const base = markerFracRef.current ?? ((idToIndex.get(currentRowId) ?? 0) / Math.max(1, n - 1));
+    const curIdx = Math.round(base * (n - 1));
     const step = e.key === 'PageUp' || e.key === 'PageDown' ? Math.round(n / 20) : Math.round(n / BUCKETS);
     if (e.key === 'ArrowUp' || e.key === 'PageUp') {
       e.preventDefault();
-      navToFrac(Math.max(0, curIdx - step) / (n - 1));
+      goTo(Math.max(0, curIdx - step) / (n - 1));
     } else if (e.key === 'ArrowDown' || e.key === 'PageDown') {
       e.preventDefault();
-      navToFrac(Math.min(n - 1, curIdx + step) / (n - 1));
+      goTo(Math.min(n - 1, curIdx + step) / (n - 1));
     } else if (e.key === 'Home') {
       e.preventDefault();
-      navToFrac(0);
+      goTo(0);
     } else if (e.key === 'End') {
       e.preventDefault();
-      navToFrac(1);
+      goTo(1);
     }
-  }, [n, idToIndex, currentRowId, navToFrac]);
+  }, [n, idToIndex, currentRowId, goTo]);
 
   if (widthClass === 'compact' || n === 0) return null;
 
   const currentFrac = n > 1 ? (idToIndex.get(currentRowId) ?? 0) / (n - 1) : 0;
-
-  // The "you-are-here" band spans the rows actually on screen (first→last
-  // visible). Falls back to a point at currentRowId before the viewport has
-  // reported a range.
-  const firstFrac = fracOfId(visibleFirstRowId);
-  const lastFrac = fracOfId(visibleLastRowId);
-  const haveRange = firstFrac !== null && lastFrac !== null;
-  const rangeTop = haveRange ? Math.min(firstFrac!, lastFrac!) : currentFrac;
-  const rangeBottom = haveRange ? Math.max(firstFrac!, lastFrac!) : currentFrac;
-  // One screenful's height — reused so the scrub band matches the real band.
-  const bandH = Math.max(0.02, rangeBottom - rangeTop);
-
-  // While scrubbing, the SAME-SIZE band jumps to the pointer immediately;
-  // otherwise it sits on the live visible range.
-  let bandTop: number;
-  let bandBottom: number;
-  if (scrubFrac !== null) {
-    bandTop = Math.min(1 - bandH, Math.max(0, scrubFrac - bandH / 2));
-    bandBottom = bandTop + bandH;
-  } else {
-    bandTop = rangeTop;
-    bandBottom = rangeBottom;
-  }
+  // Band centre: the user's set position, or the current reading spot until
+  // they first touch the strip. Fixed height — never resized by scrolling.
+  const markerCenter = markerFrac ?? currentFrac;
 
   return (
     <div
@@ -278,7 +220,7 @@ export function GospelXray({ theme, onGoToRow }: GospelXrayProps) {
         aria-orientation="vertical"
         aria-valuemin={0}
         aria-valuemax={100}
-        aria-valuenow={Math.round(((bandTop + bandBottom) / 2) * 100)}
+        aria-valuenow={Math.round(markerCenter * 100)}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={endScrub}
@@ -294,23 +236,23 @@ export function GospelXray({ theme, onGoToRow }: GospelXrayProps) {
       >
         {lanesSvg}
 
-        {/* You-are-here band: a rectangle covering the rows currently on screen.
-            On tap it jumps straight to the pointer (no transition, no preview
-            line) and stays there until the viewport catches up. */}
+        {/* Position handle: fixed-height rectangle that sits where the user set
+            it. Driven only by tapping/dragging the strip — scrolling the verses
+            never moves or resizes it. */}
         <div
           style={{
             position: 'absolute',
             left: 0,
             right: 0,
-            top: `${bandTop * 100}%`,
-            height: `${Math.max(0, bandBottom - bandTop) * 100}%`,
-            minHeight: 10,
+            top: `${markerCenter * 100}%`,
+            height: 22,
+            transform: 'translateY(-50%)',
             boxSizing: 'border-box',
             background: `${theme.text}26`,
             border: `1.5px solid ${theme.text}`,
             borderRadius: 2,
             boxShadow: `0 0 0 0.5px ${theme.bg}`,
-            opacity: scrubFrac !== null ? 1 : 0.9,
+            opacity: 0.9,
             pointerEvents: 'none',
           }}
         />
