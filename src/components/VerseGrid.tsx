@@ -7,7 +7,7 @@ import { PericopeChunk, type PericopeChunkData } from './PericopeChunk';
 import type { Theme } from '../lib/theme';
 
 export interface VerseGridHandle {
-  scrollToRow: (rowId: number) => void;
+  scrollToRow: (rowId: number, opts?: { instant?: boolean }) => void;
 }
 
 interface VerseGridProps {
@@ -213,9 +213,10 @@ export const VerseGrid = forwardRef<VerseGridHandle, VerseGridProps>(function Ve
   useImperativeHandle(
     ref,
     () => ({
-      scrollToRow: (rowId: number) => {
+      scrollToRow: (rowId: number, opts?: { instant?: boolean }) => {
         const container = scrollParent;
         if (!container) return;
+        const scrollBehavior: ScrollBehavior = opts?.instant ? 'auto' : 'smooth';
         const chunkIndex = pericopeChunks.findIndex(c =>
           c.rows.some(r => r.id === rowId)
         );
@@ -237,7 +238,7 @@ export const VerseGrid = forwardRef<VerseGridHandle, VerseGridProps>(function Ve
           const elRect = el.getBoundingClientRect();
           const containerRect = container.getBoundingClientRect();
           const targetTop = elRect.top - containerRect.top + container.scrollTop - 8;
-          container.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
+          container.scrollTo({ top: Math.max(0, targetTop), behavior: scrollBehavior });
           return true;
         };
 

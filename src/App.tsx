@@ -58,8 +58,8 @@ function App() {
     }
   }, [currentRowId, rows]);
 
-  const scrollToRow = useCallback((rowId: number) => {
-    gridRef.current?.scrollToRow(rowId);
+  const scrollToRow = useCallback((rowId: number, opts?: { instant?: boolean }) => {
+    gridRef.current?.scrollToRow(rowId, opts);
     setHighlightedRowId(rowId);
     setTimeout(() => setHighlightedRowId(null), 2000);
   }, [setHighlightedRowId]);

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, useCallback } from 'react';
+import { useMemo, useRef, useState, useCallback, useEffect } from 'react';
 import { useDataStore } from '../stores/dataStore';
 import { useAppStore } from '../stores/appStore';
 import { GOSPEL_KEYS, TIMELINE_PHASES } from '../lib/types';
@@ -6,12 +6,12 @@ import type { Theme } from '../lib/theme';
 import { useWidthClass } from '../hooks/useMediaQuery';
 import { useT } from '../lib/i18n';
 
-const STRIP_WIDTH = 30;     // px — narrow vertical strip, left of the sidebar
+const STRIP_WIDTH = 48;     // px — vertical strip, left of the sidebar
 const BUCKETS = 220;        // vertical resolution: ~2750 rows squeezed into 220 slices
 
 interface GospelXrayProps {
   theme: Theme;
-  onGoToRow: (rowId: number) => void;
+  onGoToRow: (rowId: number, opts?: { instant?: boolean }) => void;
 }
 
 /**
@@ -32,6 +32,17 @@ export function GospelXray({ theme, onGoToRow }: GospelXrayProps) {
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [scrubFrac, setScrubFrac] = useState<number | null>(null);
+  // Mirror of scrubFrac for synchronous reads inside event handlers.
+  const scrubFracRef = useRef<number | null>(null);
+  const setScrub = useCallback((v: number | null) => {
+    scrubFracRef.current = v;
+    setScrubFrac(v);
+  }, []);
+  // After a tap/drag navigation we keep the band pinned at the tapped point
+  // until the reading view reports its new visible range — so the band lands
+  // once, cleanly, instead of sliding while the list settles.
+  const awaitingNavRef = useRef(false);
+  const clearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Per-bucket verse density for each gospel + a row-id → index lookup. Heavy,
   // so memoized on `rows` only (does NOT recompute as you scroll/read).
@@ -132,31 +143,51 @@ export function GospelXray({ theme, onGoToRow }: GospelXrayProps) {
     return Math.min(1, Math.max(0, (clientY - rect.top) / rect.height));
   }, []);
 
-  const navToFrac = useCallback((frac: number) => {
+  const navToFrac = useCallback((frac: number, instant = false) => {
     if (n === 0) return;
     const idx = Math.min(n - 1, Math.max(0, Math.round(frac * (n - 1))));
     const rowId = rows[idx]?.id;
-    if (rowId != null) onGoToRow(rowId);
+    if (rowId != null) onGoToRow(rowId, { instant });
   }, [n, rows, onGoToRow]);
 
-  // Press/drag previews the marker; navigation commits once on release — so a
-  // tap is a single jump and a drag doesn't thrash the virtualized list.
+  // Clear the pinned band once the reading view reports a fresh visible range
+  // (its post-navigation position), or after a short fallback if it doesn't.
+  useEffect(() => {
+    if (!awaitingNavRef.current) return;
+    awaitingNavRef.current = false;
+    if (clearTimerRef.current) { clearTimeout(clearTimerRef.current); clearTimerRef.current = null; }
+    setScrub(null);
+  }, [visibleFirstRowId, visibleLastRowId, setScrub]);
+
+  // Press/drag previews the band; navigation commits once on release. The band
+  // stays pinned at the release point until the new range arrives (see effect).
   const onPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     e.currentTarget.setPointerCapture(e.pointerId);
-    setScrubFrac(fracFromClientY(e.clientY));
-  }, [fracFromClientY]);
+    if (clearTimerRef.current) { clearTimeout(clearTimerRef.current); clearTimerRef.current = null; }
+    awaitingNavRef.current = false;
+    setScrub(fracFromClientY(e.clientY));
+  }, [fracFromClientY, setScrub]);
 
   const onPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    setScrubFrac(prev => (prev === null ? prev : fracFromClientY(e.clientY)));
-  }, [fracFromClientY]);
+    if (scrubFracRef.current === null) return;
+    setScrub(fracFromClientY(e.clientY));
+  }, [fracFromClientY, setScrub]);
 
   const endScrub = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    setScrubFrac(prev => {
-      if (prev !== null) navToFrac(prev);
-      return null;
-    });
+    const frac = scrubFracRef.current;
     try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* noop */ }
-  }, [navToFrac]);
+    if (frac === null) return;
+    // Jump instantly and keep the band pinned at the tapped point until the
+    // reading view reports its settled range (cleared by the effect above).
+    awaitingNavRef.current = true;
+    navToFrac(frac, true);
+    if (clearTimerRef.current) clearTimeout(clearTimerRef.current);
+    clearTimerRef.current = setTimeout(() => {
+      awaitingNavRef.current = false;
+      clearTimerRef.current = null;
+      setScrub(null);
+    }, 600);
+  }, [navToFrac, setScrub]);
 
   const onKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
     if (n === 0) return;

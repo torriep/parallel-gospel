@@ -110,6 +110,11 @@ export function PericopeChunk({
                     onTouchEnd={clearLongPress}
                     className={isHighlighted ? 'highlight-flash' : ''}
                     style={{
+                      // Pin every cell to its gospel's column. Without this, a
+                      // null (vertically-merged) or row-spanning cell lets CSS
+                      // auto-placement slide the following cells over, rotating
+                      // whole rows into the wrong columns.
+                      gridColumn: i + 1,
                       gridRow: span > 1 ? `span ${span}` : undefined,
                       borderRight: i < GOSPEL_KEYS.length - 1 ? `1px solid ${theme.borderLight}` : 'none',
                       borderBottom: `1px solid ${theme.borderLight}`,
