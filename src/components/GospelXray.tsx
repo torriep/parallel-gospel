@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, useCallback } from 'react';
+import { useMemo, useRef, useState, useCallback, useEffect } from 'react';
 import { useDataStore } from '../stores/dataStore';
 import { useAppStore } from '../stores/appStore';
 import { GOSPEL_KEYS, TIMELINE_PHASES } from '../lib/types';
@@ -34,8 +34,8 @@ export function GospelXray({ theme, onGoToRow }: GospelXrayProps) {
   // BI-DIRECTIONAL: normally the band tracks the reading position (top of the
   // viewport), so manual scrolling moves it. While the user is dragging it, OR
   // while the tap-triggered auto-scroll is still running, we show the pinned
-  // position instead. Tracking resumes the moment the scroll actually settles
-  // (isAutoScrolling flips false) — no fixed delay, no threshold guessing.
+  // position instead. Tracking resumes only after the scroll has settled AND
+  // the visible-range data has stopped changing (see release effect below).
   const [pinFrac, setPinFrac] = useState<number | null>(null);
   const pinFracRef = useRef<number | null>(null);
   const setPin = useCallback((v: number | null) => {
@@ -43,6 +43,30 @@ export function GospelXray({ theme, onGoToRow }: GospelXrayProps) {
     setPinFrac(v);
   }, []);
   const draggingRef = useRef(false);
+
+  // Release the pin only when the grid has TRULY stopped moving: the
+  // auto-scroll flag is off AND the visible-range data has been stable for
+  // ~200ms. (The flag alone is not enough: it flips off 150ms after the last
+  // scroll event, but the IntersectionObserver that feeds visibleFirstRowId
+  // can report later than that while a large pericope is still laying out —
+  // unfreezing on the flag alone made the rectangle follow stale, shifting
+  // data. That was the intermittent jump.) This effect re-runs on every
+  // visibleFirstRowId change, so the timer keeps re-arming while the data is
+  // still moving and only fires once it has settled.
+  const releaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (pinFrac === null || isAutoScrolling) return;
+    releaseTimerRef.current = setTimeout(() => {
+      releaseTimerRef.current = null;
+      if (!draggingRef.current) setPin(null);
+    }, 200);
+    return () => {
+      if (releaseTimerRef.current) {
+        clearTimeout(releaseTimerRef.current);
+        releaseTimerRef.current = null;
+      }
+    };
+  }, [pinFrac, isAutoScrolling, visibleFirstRowId, setPin]);
 
   // Per-bucket verse density for each gospel + a row-id → index lookup. Heavy,
   // so memoized on `rows` only (does NOT recompute as you scroll/read).
@@ -212,8 +236,9 @@ export function GospelXray({ theme, onGoToRow }: GospelXrayProps) {
   // scrolling can't push it). Otherwise follow the top of the visible range,
   // so manual scrolling moves it (bi-directional). Height is fixed.
   const liveFrac = fracOfId(visibleFirstRowId) ?? currentFrac;
-  const frozen = draggingRef.current || isAutoScrolling;
-  const markerCenter = frozen && pinFrac !== null ? pinFrac : liveFrac;
+  // As long as a pin exists, show it — the release effect above clears it only
+  // once the grid has demonstrably stopped moving, so the handoff is seamless.
+  const markerCenter = pinFrac !== null ? pinFrac : liveFrac;
 
   return (
     <div
