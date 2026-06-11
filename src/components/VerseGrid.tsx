@@ -33,6 +33,21 @@ export const VerseGrid = forwardRef<VerseGridHandle, VerseGridProps>(function Ve
   const isAutoScrolling = useRef(false);
   const autoScrollClearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Event-driven end-of-auto-scroll detection: while a programmatic scroll is
+  // running we keep the store's isAutoScrolling flag true and re-arm a short
+  // settle timer on every scroll event; when the scrolling actually stops
+  // (no scroll for ~150ms) we flip it false. A hard cap guards against sticks.
+  const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const maxAutoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleSettle = useCallback(() => {
+    if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+    settleTimerRef.current = setTimeout(() => {
+      settleTimerRef.current = null;
+      if (maxAutoTimerRef.current) { clearTimeout(maxAutoTimerRef.current); maxAutoTimerRef.current = null; }
+      useAppStore.getState().setAutoScrolling(false);
+    }, 150);
+  }, []);
+
   // Build pericope chunks with span-overflow safety.
   // Each chunk = [sectionHeader, rows from pericope.startRow up to next.startRow-1],
   // extended forward if any verse.span would reach past the boundary.
@@ -226,6 +241,16 @@ export const VerseGrid = forwardRef<VerseGridHandle, VerseGridProps>(function Ve
         if (autoScrollClearTimer.current) clearTimeout(autoScrollClearTimer.current);
         setCurrentRowId(rowId);
 
+        // Tell the x-ray to freeze tracking until this scroll has settled.
+        useAppStore.getState().setAutoScrolling(true);
+        scheduleSettle();
+        if (maxAutoTimerRef.current) clearTimeout(maxAutoTimerRef.current);
+        maxAutoTimerRef.current = setTimeout(() => {
+          maxAutoTimerRef.current = null;
+          if (settleTimerRef.current) { clearTimeout(settleTimerRef.current); settleTimerRef.current = null; }
+          useAppStore.getState().setAutoScrolling(false);
+        }, 1500);
+
         virtuosoRef.current?.scrollToIndex({
           index: chunkIndex,
           behavior: 'auto',
@@ -255,13 +280,18 @@ export const VerseGrid = forwardRef<VerseGridHandle, VerseGridProps>(function Ve
         }, 800);
       },
     }),
-    [scrollParent, pericopeChunks, setCurrentRowId]
+    [scrollParent, pericopeChunks, setCurrentRowId, scheduleSettle]
   );
 
   return (
     <div
       ref={onScrollParentRef}
       data-grid-scroller=""
+      onScroll={() => {
+        // While an auto-scroll is in flight, each scroll event pushes the
+        // "settled" moment later; when they stop, scheduleSettle fires.
+        if (useAppStore.getState().isAutoScrolling) scheduleSettle();
+      }}
       style={{
         flex: 1,
         overflowY: 'auto',

@@ -28,6 +28,10 @@ interface AppState {
   // scroll-spy value used for the sidebar highlight).
   visibleFirstRowId: number | null;
   visibleLastRowId: number | null;
+  // True while a programmatic (x-ray-initiated) scroll is in flight. The x-ray
+  // band freezes while this is true and resumes tracking the viewport once the
+  // scroll has actually settled.
+  isAutoScrolling: boolean;
   currentRefs: Record<GospelKey, string | null>;
 
   // Actions
@@ -49,6 +53,7 @@ interface AppState {
   setHighlightedRowId: (id: number | null) => void;
   setCurrentRowId: (id: number) => void;
   setVisibleRange: (first: number | null, last: number | null) => void;
+  setAutoScrolling: (b: boolean) => void;
   setCurrentRefs: (refs: Record<GospelKey, string | null>) => void;
   loadSettings: () => Promise<void>;
 }
@@ -75,6 +80,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   currentRowId: 1,
   visibleFirstRowId: null,
   visibleLastRowId: null,
+  isAutoScrolling: false,
   currentRefs: { MT: null, MC: null, LC: null, JN: null },
 
   toggleDarkMode: () => {
@@ -113,6 +119,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       ? s
       : { visibleFirstRowId: first, visibleLastRowId: last }
   ),
+  setAutoScrolling: (b) => set(s => s.isAutoScrolling === b ? s : { isAutoScrolling: b }),
   setCurrentRefs: (refs) => set({ currentRefs: refs }),
 
   loadSettings: async () => {

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, useCallback, useEffect } from 'react';
+import { useMemo, useRef, useState, useCallback } from 'react';
 import { useDataStore } from '../stores/dataStore';
 import { useAppStore } from '../stores/appStore';
 import { GOSPEL_KEYS, TIMELINE_PHASES } from '../lib/types';
@@ -26,16 +26,16 @@ export function GospelXray({ theme, onGoToRow }: GospelXrayProps) {
   const rows = useDataStore(s => s.rows);
   const currentRowId = useAppStore(s => s.currentRowId);
   const visibleFirstRowId = useAppStore(s => s.visibleFirstRowId);
-  const visibleLastRowId = useAppStore(s => s.visibleLastRowId);
+  const isAutoScrolling = useAppStore(s => s.isAutoScrolling);
   const widthClass = useWidthClass();
   const tr = useT();
 
   const containerRef = useRef<HTMLDivElement>(null);
   // BI-DIRECTIONAL: normally the band tracks the reading position (top of the
-  // viewport), so manual scrolling moves it. While the user is setting it
-  // (drag) and during the resulting auto-scroll, we "pin" it so the rapid
-  // programmatic scroll doesn't make it jump around; the pin is released once
-  // the viewport has actually reached the target (then tracking resumes).
+  // viewport), so manual scrolling moves it. While the user is dragging it, OR
+  // while the tap-triggered auto-scroll is still running, we show the pinned
+  // position instead. Tracking resumes the moment the scroll actually settles
+  // (isAutoScrolling flips false) — no fixed delay, no threshold guessing.
   const [pinFrac, setPinFrac] = useState<number | null>(null);
   const pinFracRef = useRef<number | null>(null);
   const setPin = useCallback((v: number | null) => {
@@ -43,7 +43,6 @@ export function GospelXray({ theme, onGoToRow }: GospelXrayProps) {
     setPinFrac(v);
   }, []);
   const draggingRef = useRef(false);
-  const safetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Per-bucket verse density for each gospel + a row-id → index lookup. Heavy,
   // so memoized on `rows` only (does NOT recompute as you scroll/read).
@@ -158,36 +157,17 @@ export function GospelXray({ theme, onGoToRow }: GospelXrayProps) {
   [n, idToIndex]);
 
   // Pin the band at a position and scroll the verses there instantly. The pin
-  // suppresses tracking during the fast auto-scroll; it's released once the
-  // viewport reaches the target (effect below), or by a safety timeout.
+  // holds the band still while the auto-scroll runs; VerseGrid flips
+  // isAutoScrolling false once the scroll has settled, and tracking resumes.
   const commitTo = useCallback((frac: number) => {
     const f = Math.min(1, Math.max(0, frac));
     setPin(f);
     navToFrac(f, true);
-    if (safetyTimerRef.current) clearTimeout(safetyTimerRef.current);
-    safetyTimerRef.current = setTimeout(() => {
-      safetyTimerRef.current = null;
-      if (!draggingRef.current) setPin(null);
-    }, 1500);
   }, [setPin, navToFrac]);
-
-  // Release the pin once the viewport's top row reaches the pinned spot, so the
-  // band hands back to live tracking seamlessly (no jump, no flash).
-  useEffect(() => {
-    const p = pinFracRef.current;
-    if (p === null || draggingRef.current) return;
-    const top = fracOfId(visibleFirstRowId);
-    if (top === null) return;
-    if (Math.abs(top - p) <= 0.04) {
-      if (safetyTimerRef.current) { clearTimeout(safetyTimerRef.current); safetyTimerRef.current = null; }
-      setPin(null);
-    }
-  }, [visibleFirstRowId, visibleLastRowId, fracOfId, setPin]);
 
   // Press/drag pins the band to the pointer; release commits the scroll.
   const onPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     e.currentTarget.setPointerCapture(e.pointerId);
-    if (safetyTimerRef.current) { clearTimeout(safetyTimerRef.current); safetyTimerRef.current = null; }
     draggingRef.current = true;
     setPin(fracFromClientY(e.clientY));
   }, [fracFromClientY, setPin]);
@@ -227,11 +207,13 @@ export function GospelXray({ theme, onGoToRow }: GospelXrayProps) {
   if (widthClass === 'compact' || n === 0) return null;
 
   const currentFrac = n > 1 ? (idToIndex.get(currentRowId) ?? 0) / (n - 1) : 0;
-  // Band centre: pinned while the user sets it and during the auto-scroll;
-  // otherwise it follows the top of the visible range, so manual scrolling
-  // moves it (bi-directional). Height is fixed — never resized by scrolling.
+  // Band centre. While the user is dragging it, or while the tap-triggered
+  // auto-scroll is still running, show the pinned position (frozen — the
+  // scrolling can't push it). Otherwise follow the top of the visible range,
+  // so manual scrolling moves it (bi-directional). Height is fixed.
   const liveFrac = fracOfId(visibleFirstRowId) ?? currentFrac;
-  const markerCenter = pinFrac ?? liveFrac;
+  const frozen = draggingRef.current || isAutoScrolling;
+  const markerCenter = frozen && pinFrac !== null ? pinFrac : liveFrac;
 
   return (
     <div
