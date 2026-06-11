@@ -150,17 +150,31 @@ export function GospelXray({ theme, onGoToRow }: GospelXrayProps) {
     if (rowId != null) onGoToRow(rowId, { instant });
   }, [n, rows, onGoToRow]);
 
-  // Clear the pinned band once the reading view reports a fresh visible range
-  // (its post-navigation position), or after a short fallback if it doesn't.
+  const fracOfId = useCallback((id: number | null) =>
+    n > 1 && id != null && idToIndex.has(id)
+      ? (idToIndex.get(id) as number) / (n - 1)
+      : null,
+  [n, idToIndex]);
+
+  // After a tap we pin the band at the tapped point and hand off to the live
+  // range ONLY once the viewport has actually scrolled to that area — so the
+  // band never flashes the old position or slides into place.
   useEffect(() => {
     if (!awaitingNavRef.current) return;
-    awaitingNavRef.current = false;
-    if (clearTimerRef.current) { clearTimeout(clearTimerRef.current); clearTimerRef.current = null; }
-    setScrub(null);
-  }, [visibleFirstRowId, visibleLastRowId, setScrub]);
+    const f = scrubFracRef.current;
+    if (f === null) { awaitingNavRef.current = false; return; }
+    const a = fracOfId(visibleFirstRowId);
+    const b = fracOfId(visibleLastRowId);
+    if (a === null || b === null) return;
+    const margin = 0.02;
+    if (f >= Math.min(a, b) - margin && f <= Math.max(a, b) + margin) {
+      awaitingNavRef.current = false;
+      if (clearTimerRef.current) { clearTimeout(clearTimerRef.current); clearTimerRef.current = null; }
+      setScrub(null);
+    }
+  }, [visibleFirstRowId, visibleLastRowId, fracOfId, setScrub]);
 
-  // Press/drag previews the band; navigation commits once on release. The band
-  // stays pinned at the release point until the new range arrives (see effect).
+  // Press/drag moves the band to the pointer; navigation commits on release.
   const onPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     e.currentTarget.setPointerCapture(e.pointerId);
     if (clearTimerRef.current) { clearTimeout(clearTimerRef.current); clearTimerRef.current = null; }
@@ -177,8 +191,16 @@ export function GospelXray({ theme, onGoToRow }: GospelXrayProps) {
     const frac = scrubFracRef.current;
     try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* noop */ }
     if (frac === null) return;
-    // Jump instantly and keep the band pinned at the tapped point until the
-    // reading view reports its settled range (cleared by the effect above).
+    // Already showing this area? Nothing to navigate — just drop the pin.
+    const st = useAppStore.getState();
+    const a = fracOfId(st.visibleFirstRowId);
+    const b = fracOfId(st.visibleLastRowId);
+    if (a !== null && b !== null && frac >= Math.min(a, b) - 0.02 && frac <= Math.max(a, b) + 0.02) {
+      setScrub(null);
+      return;
+    }
+    // Otherwise jump instantly; keep the band pinned at the tap until the
+    // viewport reaches it (handed off by the effect above; safety net here).
     awaitingNavRef.current = true;
     navToFrac(frac, true);
     if (clearTimerRef.current) clearTimeout(clearTimerRef.current);
@@ -186,8 +208,8 @@ export function GospelXray({ theme, onGoToRow }: GospelXrayProps) {
       awaitingNavRef.current = false;
       clearTimerRef.current = null;
       setScrub(null);
-    }, 600);
-  }, [navToFrac, setScrub]);
+    }, 1200);
+  }, [navToFrac, setScrub, fracOfId]);
 
   const onKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
     if (n === 0) return;
@@ -210,25 +232,30 @@ export function GospelXray({ theme, onGoToRow }: GospelXrayProps) {
 
   if (widthClass === 'compact' || n === 0) return null;
 
-  const fracOf = (rowId: number | null) =>
-    n > 1 && rowId != null && idToIndex.has(rowId)
-      ? (idToIndex.get(rowId) as number) / (n - 1)
-      : null;
-
   const currentFrac = n > 1 ? (idToIndex.get(currentRowId) ?? 0) / (n - 1) : 0;
 
   // The "you-are-here" band spans the rows actually on screen (first→last
   // visible). Falls back to a point at currentRowId before the viewport has
-  // reported a range. While scrubbing, the band collapses to the drag point.
-  const firstFrac = fracOf(visibleFirstRowId);
-  const lastFrac = fracOf(visibleLastRowId);
+  // reported a range.
+  const firstFrac = fracOfId(visibleFirstRowId);
+  const lastFrac = fracOfId(visibleLastRowId);
   const haveRange = firstFrac !== null && lastFrac !== null;
-  const bandTop = scrubFrac !== null
-    ? scrubFrac
-    : haveRange ? Math.min(firstFrac!, lastFrac!) : currentFrac;
-  const bandBottom = scrubFrac !== null
-    ? scrubFrac
-    : haveRange ? Math.max(firstFrac!, lastFrac!) : currentFrac;
+  const rangeTop = haveRange ? Math.min(firstFrac!, lastFrac!) : currentFrac;
+  const rangeBottom = haveRange ? Math.max(firstFrac!, lastFrac!) : currentFrac;
+  // One screenful's height — reused so the scrub band matches the real band.
+  const bandH = Math.max(0.02, rangeBottom - rangeTop);
+
+  // While scrubbing, the SAME-SIZE band jumps to the pointer immediately;
+  // otherwise it sits on the live visible range.
+  let bandTop: number;
+  let bandBottom: number;
+  if (scrubFrac !== null) {
+    bandTop = Math.min(1 - bandH, Math.max(0, scrubFrac - bandH / 2));
+    bandBottom = bandTop + bandH;
+  } else {
+    bandTop = rangeTop;
+    bandBottom = rangeBottom;
+  }
 
   return (
     <div
@@ -267,8 +294,9 @@ export function GospelXray({ theme, onGoToRow }: GospelXrayProps) {
       >
         {lanesSvg}
 
-        {/* You-are-here band: a rectangle covering the rows currently on screen
-            (or a thin preview line while scrubbing). */}
+        {/* You-are-here band: a rectangle covering the rows currently on screen.
+            On tap it jumps straight to the pointer (no transition, no preview
+            line) and stays there until the viewport catches up. */}
         <div
           style={{
             position: 'absolute',
@@ -276,10 +304,9 @@ export function GospelXray({ theme, onGoToRow }: GospelXrayProps) {
             right: 0,
             top: `${bandTop * 100}%`,
             height: `${Math.max(0, bandBottom - bandTop) * 100}%`,
-            minHeight: scrubFrac !== null ? 2 : 10,
-            transform: scrubFrac !== null ? 'translateY(-1px)' : undefined,
+            minHeight: 10,
             boxSizing: 'border-box',
-            background: scrubFrac !== null ? 'transparent' : `${theme.text}26`,
+            background: `${theme.text}26`,
             border: `1.5px solid ${theme.text}`,
             borderRadius: 2,
             boxShadow: `0 0 0 0.5px ${theme.bg}`,
