@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, useCallback } from 'react';
+import { useMemo, useRef, useState, useCallback, useEffect } from 'react';
 import { useDataStore } from '../stores/dataStore';
 import { useAppStore } from '../stores/appStore';
 import { GOSPEL_KEYS, TIMELINE_PHASES } from '../lib/types';
@@ -25,20 +25,25 @@ interface GospelXrayProps {
 export function GospelXray({ theme, onGoToRow }: GospelXrayProps) {
   const rows = useDataStore(s => s.rows);
   const currentRowId = useAppStore(s => s.currentRowId);
+  const visibleFirstRowId = useAppStore(s => s.visibleFirstRowId);
+  const visibleLastRowId = useAppStore(s => s.visibleLastRowId);
   const widthClass = useWidthClass();
   const tr = useT();
 
   const containerRef = useRef<HTMLDivElement>(null);
-  // ONE-WAY control: the band's position is set ONLY by tapping/dragging the
-  // strip. Scrolling the verses never moves or resizes it. null until the
-  // first interaction (then it falls back to the current reading position).
-  const [markerFrac, setMarkerFrac] = useState<number | null>(null);
-  const markerFracRef = useRef<number | null>(null);
-  const setMarker = useCallback((v: number) => {
-    markerFracRef.current = v;
-    setMarkerFrac(v);
+  // BI-DIRECTIONAL: normally the band tracks the reading position (top of the
+  // viewport), so manual scrolling moves it. While the user is setting it
+  // (drag) and during the resulting auto-scroll, we "pin" it so the rapid
+  // programmatic scroll doesn't make it jump around; the pin is released once
+  // the viewport has actually reached the target (then tracking resumes).
+  const [pinFrac, setPinFrac] = useState<number | null>(null);
+  const pinFracRef = useRef<number | null>(null);
+  const setPin = useCallback((v: number | null) => {
+    pinFracRef.current = v;
+    setPinFrac(v);
   }, []);
   const draggingRef = useRef(false);
+  const safetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Per-bucket verse density for each gospel + a row-id → index lookup. Heavy,
   // so memoized on `rows` only (does NOT recompute as you scroll/read).
@@ -146,58 +151,87 @@ export function GospelXray({ theme, onGoToRow }: GospelXrayProps) {
     if (rowId != null) onGoToRow(rowId, { instant });
   }, [n, rows, onGoToRow]);
 
-  // Move the band to a position and scroll the verses there (instantly).
-  const goTo = useCallback((frac: number) => {
-    const f = Math.min(1, Math.max(0, frac));
-    setMarker(f);
-    navToFrac(f, true);
-  }, [setMarker, navToFrac]);
+  const fracOfId = useCallback((id: number | null) =>
+    n > 1 && id != null && idToIndex.has(id)
+      ? (idToIndex.get(id) as number) / (n - 1)
+      : null,
+  [n, idToIndex]);
 
-  // Press/drag moves the band to the pointer; release commits the scroll.
+  // Pin the band at a position and scroll the verses there instantly. The pin
+  // suppresses tracking during the fast auto-scroll; it's released once the
+  // viewport reaches the target (effect below), or by a safety timeout.
+  const commitTo = useCallback((frac: number) => {
+    const f = Math.min(1, Math.max(0, frac));
+    setPin(f);
+    navToFrac(f, true);
+    if (safetyTimerRef.current) clearTimeout(safetyTimerRef.current);
+    safetyTimerRef.current = setTimeout(() => {
+      safetyTimerRef.current = null;
+      if (!draggingRef.current) setPin(null);
+    }, 1500);
+  }, [setPin, navToFrac]);
+
+  // Release the pin once the viewport's top row reaches the pinned spot, so the
+  // band hands back to live tracking seamlessly (no jump, no flash).
+  useEffect(() => {
+    const p = pinFracRef.current;
+    if (p === null || draggingRef.current) return;
+    const top = fracOfId(visibleFirstRowId);
+    if (top === null) return;
+    if (Math.abs(top - p) <= 0.04) {
+      if (safetyTimerRef.current) { clearTimeout(safetyTimerRef.current); safetyTimerRef.current = null; }
+      setPin(null);
+    }
+  }, [visibleFirstRowId, visibleLastRowId, fracOfId, setPin]);
+
+  // Press/drag pins the band to the pointer; release commits the scroll.
   const onPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     e.currentTarget.setPointerCapture(e.pointerId);
+    if (safetyTimerRef.current) { clearTimeout(safetyTimerRef.current); safetyTimerRef.current = null; }
     draggingRef.current = true;
-    setMarker(fracFromClientY(e.clientY));
-  }, [fracFromClientY, setMarker]);
+    setPin(fracFromClientY(e.clientY));
+  }, [fracFromClientY, setPin]);
 
   const onPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (!draggingRef.current) return;
-    setMarker(fracFromClientY(e.clientY));
-  }, [fracFromClientY, setMarker]);
+    setPin(fracFromClientY(e.clientY));
+  }, [fracFromClientY, setPin]);
 
   const endScrub = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (!draggingRef.current) return;
     draggingRef.current = false;
     try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* noop */ }
-    goTo(fracFromClientY(e.clientY));
-  }, [fracFromClientY, goTo]);
+    commitTo(fracFromClientY(e.clientY));
+  }, [fracFromClientY, commitTo]);
 
   const onKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
     if (n === 0) return;
-    const base = markerFracRef.current ?? ((idToIndex.get(currentRowId) ?? 0) / Math.max(1, n - 1));
+    const base = pinFracRef.current ?? fracOfId(visibleFirstRowId) ?? ((idToIndex.get(currentRowId) ?? 0) / Math.max(1, n - 1));
     const curIdx = Math.round(base * (n - 1));
     const step = e.key === 'PageUp' || e.key === 'PageDown' ? Math.round(n / 20) : Math.round(n / BUCKETS);
     if (e.key === 'ArrowUp' || e.key === 'PageUp') {
       e.preventDefault();
-      goTo(Math.max(0, curIdx - step) / (n - 1));
+      commitTo(Math.max(0, curIdx - step) / (n - 1));
     } else if (e.key === 'ArrowDown' || e.key === 'PageDown') {
       e.preventDefault();
-      goTo(Math.min(n - 1, curIdx + step) / (n - 1));
+      commitTo(Math.min(n - 1, curIdx + step) / (n - 1));
     } else if (e.key === 'Home') {
       e.preventDefault();
-      goTo(0);
+      commitTo(0);
     } else if (e.key === 'End') {
       e.preventDefault();
-      goTo(1);
+      commitTo(1);
     }
-  }, [n, idToIndex, currentRowId, goTo]);
+  }, [n, idToIndex, currentRowId, visibleFirstRowId, fracOfId, commitTo]);
 
   if (widthClass === 'compact' || n === 0) return null;
 
   const currentFrac = n > 1 ? (idToIndex.get(currentRowId) ?? 0) / (n - 1) : 0;
-  // Band centre: the user's set position, or the current reading spot until
-  // they first touch the strip. Fixed height — never resized by scrolling.
-  const markerCenter = markerFrac ?? currentFrac;
+  // Band centre: pinned while the user sets it and during the auto-scroll;
+  // otherwise it follows the top of the visible range, so manual scrolling
+  // moves it (bi-directional). Height is fixed — never resized by scrolling.
+  const liveFrac = fracOfId(visibleFirstRowId) ?? currentFrac;
+  const markerCenter = pinFrac ?? liveFrac;
 
   return (
     <div
