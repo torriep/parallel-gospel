@@ -27,26 +27,44 @@ export const VerseGrid = forwardRef<VerseGridHandle, VerseGridProps>(function Ve
   const setVisibleRange = useAppStore(s => s.setVisibleRange);
 
   const [scrollParent, setScrollParent] = useState<HTMLDivElement | null>(null);
-  const onScrollParentRef = useCallback((el: HTMLDivElement | null) => setScrollParent(el), []);
+  const scrollParentRef = useRef<HTMLDivElement | null>(null);
+  const onScrollParentRef = useCallback((el: HTMLDivElement | null) => {
+    scrollParentRef.current = el;
+    setScrollParent(el);
+  }, []);
 
   const virtuosoRef = useRef<VirtuosoHandle>(null);
-  const isAutoScrolling = useRef(false);
-  const autoScrollClearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Event-driven end-of-auto-scroll detection: while a programmatic scroll is
-  // running we keep the store's isAutoScrolling flag true and re-arm a short
-  // settle timer on every scroll event; when the scrolling actually stops
-  // (no scroll for ~150ms) we flip it false. A hard cap guards against sticks.
+  // ---- Programmatic-scroll lifecycle ---------------------------------------
+  // ONE source of truth: appStore.isAutoScrolling. It is true from the moment
+  // a programmatic scroll starts until the target row is VERIFIED to have
+  // landed (instant scrolls — deterministic convergence loop below) or scroll
+  // events have stopped (smooth scrolls — settle debounce). The scroll-spy,
+  // rangeChanged and the x-ray pin all key off this single flag. The previous
+  // design had a SECOND, parallel gate (a local ref cleared by a fixed 800ms
+  // timer) that could disagree with the flag mid-flight — removed.
+  const landingRef = useRef<(() => void) | null>(null); // cancels the active landing loop
   const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const maxAutoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const endAutoScroll = useCallback(() => {
+    if (landingRef.current) { landingRef.current(); landingRef.current = null; }
+    if (settleTimerRef.current) { clearTimeout(settleTimerRef.current); settleTimerRef.current = null; }
+    if (maxAutoTimerRef.current) { clearTimeout(maxAutoTimerRef.current); maxAutoTimerRef.current = null; }
+    useAppStore.getState().setAutoScrolling(false);
+  }, []);
+
+  // Smooth scrolls only: re-armed on every scroll event; fires when they stop.
+  // Instant scrolls end their own lifecycle (the landing loop knows when it
+  // has truly landed), so the debounce defers to an active loop.
   const scheduleSettle = useCallback(() => {
     if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
     settleTimerRef.current = setTimeout(() => {
       settleTimerRef.current = null;
-      if (maxAutoTimerRef.current) { clearTimeout(maxAutoTimerRef.current); maxAutoTimerRef.current = null; }
-      useAppStore.getState().setAutoScrolling(false);
+      if (landingRef.current) return;
+      endAutoScroll();
     }, 150);
-  }, []);
+  }, [endAutoScroll]);
 
   // Build pericope chunks with span-overflow safety.
   // Each chunk = [sectionHeader, rows from pericope.startRow up to next.startRow-1],
@@ -141,6 +159,9 @@ export const VerseGrid = forwardRef<VerseGridHandle, VerseGridProps>(function Ve
   // visible — independent of the laggier currentRowId scroll-spy.
   const rangeObserverRef = useRef<IntersectionObserver | null>(null);
   const rangeVisibleRef = useRef<Set<number>>(new Set());
+  // Live registry of mounted cells per row id, so the flush below can read
+  // their positions without DOM queries.
+  const cellsByIdRef = useRef<Map<number, Set<HTMLElement>>>(new Map());
   const setVisibleRangeRef = useRef(setVisibleRange);
   setVisibleRangeRef.current = setVisibleRange;
   const rangeFlushRaf = useRef<number | null>(null);
@@ -153,18 +174,53 @@ export const VerseGrid = forwardRef<VerseGridHandle, VerseGridProps>(function Ve
         setVisibleRangeRef.current(null, null);
         return;
       }
-      let min = Infinity;
+      // Reading position = the first row that BEGINS at/below the viewport
+      // top, measured geometrically. "Lowest intersecting row id" is WRONG
+      // here: a row-spanning cell (up to 47 rows long in this data!) that
+      // started far above still touches the viewport top, dragging the
+      // reported position — and the x-ray band — up to ~25px upward after a
+      // landing. Spans now count only where they begin, not everywhere they
+      // reach.
+      const containerTop = scrollParentRef.current?.getBoundingClientRect().top;
+      let minAny = Infinity;
       let max = -Infinity;
+      let boundaryId: number | null = null;
+      let boundaryTop = Infinity;
       set.forEach(id => {
-        if (id < min) min = id;
+        if (id < minAny) minAny = id;
         if (id > max) max = id;
+        if (containerTop !== undefined) {
+          const cells = cellsByIdRef.current.get(id);
+          const el: HTMLElement | undefined = cells?.values().next().value;
+          if (el) {
+            const top = el.getBoundingClientRect().top;
+            // -12 tolerance: landings place the row's top 8px below the
+            // container top; rows a few px past the edge still count as "at
+            // the top".
+            if (top >= containerTop - 12 && top < boundaryTop) {
+              boundaryTop = top;
+              boundaryId = id;
+            }
+          }
+        }
       });
-      setVisibleRangeRef.current(min, max);
+      setVisibleRangeRef.current(
+        boundaryId ?? (minAny === Infinity ? null : minAny),
+        max === -Infinity ? null : max
+      );
     });
   }, []);
 
   const observeCell = useCallback((el: HTMLElement | null) => {
     if (!el) return;
+    {
+      const id = parseInt(el.dataset.rowId ?? '', 10);
+      if (!isNaN(id)) {
+        let cells = cellsByIdRef.current.get(id);
+        if (!cells) cellsByIdRef.current.set(id, (cells = new Set()));
+        cells.add(el);
+      }
+    }
     if (!rangeObserverRef.current) {
       const root =
         (el.closest('[data-grid-scroller]') as HTMLElement | null) ?? null;
@@ -196,7 +252,7 @@ export const VerseGrid = forwardRef<VerseGridHandle, VerseGridProps>(function Ve
             if (entry.isIntersecting) visibleRowsRef.current.add(id);
             else visibleRowsRef.current.delete(id);
           }
-          if (isAutoScrolling.current) return;
+          if (useAppStore.getState().isAutoScrolling) return;
           if (visibleRowsRef.current.size === 0) return;
           let minId = Infinity;
           visibleRowsRef.current.forEach(id => {
@@ -217,70 +273,117 @@ export const VerseGrid = forwardRef<VerseGridHandle, VerseGridProps>(function Ve
       rangeObserverRef.current?.unobserve(el);
       const id = parseInt(el.dataset.rowId ?? '', 10);
       if (!isNaN(id)) {
-        visibleRowsRef.current.delete(id);
-        rangeVisibleRef.current.delete(id);
+        const cells = cellsByIdRef.current.get(id);
+        cells?.delete(el);
+        if (cells && cells.size === 0) {
+          cellsByIdRef.current.delete(id);
+          visibleRowsRef.current.delete(id);
+          rangeVisibleRef.current.delete(id);
+        }
         flushVisibleRange();
       }
     };
   }, [flushVisibleRange]);
 
-  // Two-step scrollToRow: virtuoso jumps to the containing chunk, then we land precisely on the row.
+  // Two-step scrollToRow: virtuoso jumps to the containing chunk, then we land
+  // precisely on the row. The previous version attempted the precise landing
+  // ONCE (+1 retry at 80ms) and never verified it — if the chunk hadn't
+  // mounted yet, or virtuoso re-measured and shifted content afterwards, the
+  // viewport quietly ended up somewhere ABOVE the target (that was the
+  // "rectangle moves up after tapping" bug). Instant landings now CONVERGE:
+  // re-check every frame, correct, and only declare done after the row has
+  // held the top position for 3 consecutive frames.
   useImperativeHandle(
     ref,
     () => ({
       scrollToRow: (rowId: number, opts?: { instant?: boolean }) => {
         const container = scrollParent;
         if (!container) return;
-        const scrollBehavior: ScrollBehavior = opts?.instant ? 'auto' : 'smooth';
+        const instant = !!opts?.instant;
         const chunkIndex = pericopeChunks.findIndex(c =>
           c.rows.some(r => r.id === rowId)
         );
         if (chunkIndex < 0) return;
 
-        isAutoScrolling.current = true;
-        if (autoScrollClearTimer.current) clearTimeout(autoScrollClearTimer.current);
+        // A new command supersedes any landing still in progress.
+        endAutoScroll();
+        useAppStore.getState().setAutoScrolling(true);
         setCurrentRowId(rowId);
 
-        // Tell the x-ray to freeze tracking until this scroll has settled.
-        useAppStore.getState().setAutoScrolling(true);
-        scheduleSettle();
-        if (maxAutoTimerRef.current) clearTimeout(maxAutoTimerRef.current);
-        maxAutoTimerRef.current = setTimeout(() => {
-          maxAutoTimerRef.current = null;
-          if (settleTimerRef.current) { clearTimeout(settleTimerRef.current); settleTimerRef.current = null; }
-          useAppStore.getState().setAutoScrolling(false);
-        }, 1500);
+        // Absolute safety cap — landings normally end themselves well before.
+        maxAutoTimerRef.current = setTimeout(endAutoScroll, 2500);
 
+        // Step 1: virtuoso mounts/jumps to the containing chunk.
         virtuosoRef.current?.scrollToIndex({
           index: chunkIndex,
           behavior: 'auto',
           align: 'start',
         });
 
-        const doFinalScroll = () => {
-          const el = container.querySelector(`[data-row-id="${rowId}"]`);
-          if (!el) return false;
-          const elRect = el.getBoundingClientRect();
-          const containerRect = container.getBoundingClientRect();
-          const targetTop = elRect.top - containerRect.top + container.scrollTop - 8;
-          container.scrollTo({ top: Math.max(0, targetTop), behavior: scrollBehavior });
-          return true;
-        };
+        // Signed distance (px) between the row's top and where it should land
+        // (8px below the container top, as before).
+        const offsetOf = (el: Element) =>
+          el.getBoundingClientRect().top - container.getBoundingClientRect().top - 8;
 
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            if (!doFinalScroll()) {
-              setTimeout(doFinalScroll, 80);
+        if (instant) {
+          // Step 2 (instant — x-ray taps): convergence loop. If the user
+          // touches the list mid-landing, control is handed back immediately.
+          let cancelled = false;
+          let stable = 0;
+          let raf = 0;
+          const onUserInput = () => endAutoScroll();
+          container.addEventListener('touchstart', onUserInput, { passive: true });
+          container.addEventListener('wheel', onUserInput, { passive: true });
+          landingRef.current = () => {
+            cancelled = true;
+            cancelAnimationFrame(raf);
+            container.removeEventListener('touchstart', onUserInput);
+            container.removeEventListener('wheel', onUserInput);
+          };
+          const deadline = performance.now() + 2000;
+          const step = () => {
+            if (cancelled) return;
+            if (performance.now() > deadline) { endAutoScroll(); return; }
+            const el = container.querySelector(`[data-row-id="${rowId}"]`);
+            if (el) {
+              const delta = offsetOf(el);
+              if (Math.abs(delta) <= 1) {
+                stable += 1;
+              } else {
+                const before = container.scrollTop;
+                container.scrollTo({ top: Math.max(0, before + delta), behavior: 'auto' });
+                // Clamped at an edge (e.g. a tap near the very end of the
+                // book): the row can never reach the top — count as landed
+                // instead of spinning until the deadline.
+                stable = container.scrollTop === before ? stable + 1 : 0;
+              }
+              if (stable >= 3) { endAutoScroll(); return; }
             }
-          });
-        });
-
-        autoScrollClearTimer.current = setTimeout(() => {
-          isAutoScrolling.current = false;
-        }, 800);
+            raf = requestAnimationFrame(step);
+          };
+          raf = requestAnimationFrame(step);
+        } else {
+          // Step 2 (smooth — sidebar/search/bookmarks): wait for the row's
+          // cell to mount (every frame, up to 600ms — not a single 80ms shot),
+          // then one smooth scroll; the settle debounce ends the lifecycle.
+          scheduleSettle();
+          const deadline = performance.now() + 600;
+          const tryScroll = () => {
+            const el = container.querySelector(`[data-row-id="${rowId}"]`);
+            if (el) {
+              container.scrollTo({
+                top: Math.max(0, container.scrollTop + offsetOf(el)),
+                behavior: 'smooth',
+              });
+              return;
+            }
+            if (performance.now() < deadline) requestAnimationFrame(tryScroll);
+          };
+          requestAnimationFrame(tryScroll);
+        }
       },
     }),
-    [scrollParent, pericopeChunks, setCurrentRowId, scheduleSettle]
+    [scrollParent, pericopeChunks, setCurrentRowId, scheduleSettle, endAutoScroll]
   );
 
   return (
@@ -291,12 +394,19 @@ export const VerseGrid = forwardRef<VerseGridHandle, VerseGridProps>(function Ve
         // While an auto-scroll is in flight, each scroll event pushes the
         // "settled" moment later; when they stop, scheduleSettle fires.
         if (useAppStore.getState().isAutoScrolling) scheduleSettle();
+        // Keep the geometric reading position fresh during the scroll itself —
+        // the IntersectionObserver only fires when cells enter/leave, but the
+        // boundary row changes continuously. rAF-throttled inside.
+        flushVisibleRange();
       }}
       style={{
         flex: 1,
         overflowY: 'auto',
         overflowX: 'hidden',
-        scrollBehavior: 'smooth',
+        // NO CSS scroll-behavior:smooth here — it would animate EVERY
+        // programmatic scrollTop change, including virtuoso's internal
+        // re-measure corrections, making landings slow and drifty. Smooth
+        // scrolling is requested explicitly per scrollTo() call instead.
       }}
     >
       {scrollParent && (
@@ -307,7 +417,7 @@ export const VerseGrid = forwardRef<VerseGridHandle, VerseGridProps>(function Ve
           overscan={300}
           rangeChanged={range => {
             topChunkIndexRef.current = range.startIndex;
-            if (isAutoScrolling.current) return;
+            if (useAppStore.getState().isAutoScrolling) return;
             const topChunk = pericopeChunks[range.startIndex];
             if (!topChunk) return;
             // If currentRowId is already within the topmost chunk, leave it —

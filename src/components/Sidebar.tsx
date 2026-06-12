@@ -39,6 +39,24 @@ export function Sidebar({ theme, onGoToRow }: SidebarProps) {
     return groups;
   }, [pericopes]);
 
+  // EXACTLY ONE active section: the pericope with the greatest startRow that
+  // is <= currentRowId, computed across ALL pericopes. (The old check compared
+  // against the next item WITHIN the same phase only, so the last section of
+  // every phase had no upper bound and stayed highlighted forever — that was
+  // the "two sections highlighted at once" bug.)
+  const activePericopeId = useMemo(() => {
+    let bestId: string | null = null;
+    let bestStart = -Infinity;
+    for (const p of pericopes) {
+      const start = p.startRow;
+      if (start != null && start <= currentRowId && start > bestStart) {
+        bestStart = start;
+        bestId = p.id;
+      }
+    }
+    return bestId;
+  }, [pericopes, currentRowId]);
+
   const isCompact = widthClass === 'compact';
   const isOpen = showSidebar;
 
@@ -154,8 +172,7 @@ export function Sidebar({ theme, onGoToRow }: SidebarProps) {
               {!isCollapsed && (
                 <div>
                   {items.map(p => {
-                    const isActive = p.startRow <= currentRowId &&
-                      (items[items.indexOf(p) + 1]?.startRow ?? Infinity) > currentRowId;
+                    const isActive = p.id === activePericopeId;
                     return (
                       <button
                         key={p.id}
