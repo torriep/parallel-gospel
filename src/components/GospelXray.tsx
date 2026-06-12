@@ -280,20 +280,22 @@ export function GospelXray({ theme, onGoToRow }: GospelXrayProps) {
         {/* Position handle: fixed-height rectangle that sits where the user set
             it. Driven only by tapping/dragging the strip — scrolling the verses
             never moves or resizes it. */}
+        {/* White with a dark outer ring: visible on both the dark density ink
+            and the light strip background, in both themes (the old theme.text
+            border vanished against dark lanes). */}
         <div
           style={{
             position: 'absolute',
             left: 0,
             right: 0,
             top: `${markerCenter * 100}%`,
-            height: 22,
+            height: 26,
             transform: 'translateY(-50%)',
             boxSizing: 'border-box',
-            background: `${theme.text}26`,
-            border: `1.5px solid ${theme.text}`,
-            borderRadius: 2,
-            boxShadow: `0 0 0 0.5px ${theme.bg}`,
-            opacity: 0.9,
+            background: 'rgba(255,255,255,0.18)',
+            border: '2.5px solid #ffffff',
+            borderRadius: 3,
+            boxShadow: '0 0 0 1px rgba(0,0,0,0.55), 0 1px 4px rgba(0,0,0,0.35)',
             pointerEvents: 'none',
           }}
         />
