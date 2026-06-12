@@ -144,6 +144,19 @@ export function SettingsPanel({ theme, onClose }: SettingsPanelProps) {
           </button>
         ))}
       </div>
+
+      {/* Build stamp — which exact code this build contains. */}
+      <div
+        style={{
+          padding: '4px 16px 14px',
+          fontSize: 11,
+          color: theme.textFaint,
+          textAlign: 'center',
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        Build {__BUILD_COMMIT__} · {__BUILD_DATE__}
+      </div>
     </>
   );
 
