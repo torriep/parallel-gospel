@@ -280,9 +280,10 @@ export function GospelXray({ theme, onGoToRow }: GospelXrayProps) {
         {/* Position handle: fixed-height rectangle that sits where the user set
             it. Driven only by tapping/dragging the strip — scrolling the verses
             never moves or resizes it. */}
-        {/* White with a dark outer ring: visible on both the dark density ink
-            and the light strip background, in both themes (the old theme.text
-            border vanished against dark lanes). */}
+        {/* Vivid gold with a dark outer ring: pops against the dark density
+            ink, the cream background, and dark mode alike (Pierre's pick —
+            the old theme.text border vanished against dark lanes; plain white
+            was still too quiet). */}
         <div
           style={{
             position: 'absolute',
@@ -292,10 +293,10 @@ export function GospelXray({ theme, onGoToRow }: GospelXrayProps) {
             height: 26,
             transform: 'translateY(-50%)',
             boxSizing: 'border-box',
-            background: 'rgba(255,255,255,0.18)',
-            border: '2.5px solid #ffffff',
+            background: 'rgba(255,214,10,0.22)',
+            border: '3px solid #FFD60A',
             borderRadius: 3,
-            boxShadow: '0 0 0 1px rgba(0,0,0,0.55), 0 1px 4px rgba(0,0,0,0.35)',
+            boxShadow: '0 0 0 1px rgba(0,0,0,0.6), 0 1px 5px rgba(0,0,0,0.35)',
             pointerEvents: 'none',
           }}
         />
