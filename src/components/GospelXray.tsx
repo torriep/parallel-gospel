@@ -191,7 +191,7 @@ export function GospelXray({ theme, onGoToRow }: GospelXrayProps) {
 
   // Press/drag pins the band to the pointer; release commits the scroll.
   const onPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    e.currentTarget.setPointerCapture(e.pointerId);
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* capture can throw for synthetic/edge-case pointers; dragging works without it */ }
     draggingRef.current = true;
     setPin(fracFromClientY(e.clientY));
   }, [fracFromClientY, setPin]);

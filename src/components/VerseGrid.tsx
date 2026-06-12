@@ -311,7 +311,7 @@ export const VerseGrid = forwardRef<VerseGridHandle, VerseGridProps>(function Ve
         setCurrentRowId(rowId);
 
         // Absolute safety cap — landings normally end themselves well before.
-        maxAutoTimerRef.current = setTimeout(endAutoScroll, 2500);
+        maxAutoTimerRef.current = setTimeout(endAutoScroll, 4500);
 
         // Step 1: virtuoso mounts/jumps to the containing chunk.
         virtuosoRef.current?.scrollToIndex({
@@ -326,11 +326,25 @@ export const VerseGrid = forwardRef<VerseGridHandle, VerseGridProps>(function Ve
           el.getBoundingClientRect().top - container.getBoundingClientRect().top - 8;
 
         if (instant) {
-          // Step 2 (instant — x-ray taps): convergence loop. If the user
-          // touches the list mid-landing, control is handed back immediately.
+          // Step 2 (instant — x-ray taps): ONE scroll driver, virtuoso itself.
+          // After scrollToIndex, virtuoso runs its own multi-frame correction
+          // cycle (it re-scrolls as unmeasured chunks get their real heights —
+          // strongest on the FIRST visit to a region). An earlier version
+          // scrolled the container directly in parallel, so two drivers fought
+          // over scrollTop toward two different targets and the landing ended
+          // anywhere ("rectangle jumps way up or way down"; fine on revisits
+          // because nothing re-measures). Now: once the target cell mounts, we
+          // compute its pixel offset INSIDE its chunk and re-issue
+          // scrollToIndex with that offset — virtuoso then keeps the row
+          // aligned through every one of its own re-measures. We only watch,
+          // and only nudge when the scroller has been provably idle.
           let cancelled = false;
-          let stable = 0;
           let raf = 0;
+          let offsetIssued = false;
+          let lastScrollTop = -1;
+          let stillFrames = 0;
+          let corrections = 0;
+          let approaches = 0;
           const onUserInput = () => endAutoScroll();
           container.addEventListener('touchstart', onUserInput, { passive: true });
           container.addEventListener('wheel', onUserInput, { passive: true });
@@ -340,24 +354,93 @@ export const VerseGrid = forwardRef<VerseGridHandle, VerseGridProps>(function Ve
             container.removeEventListener('touchstart', onUserInput);
             container.removeEventListener('wheel', onUserInput);
           };
-          const deadline = performance.now() + 2000;
+          // Dev-only landing trace (inspect window.__landingDebug in the console).
+          const dbg: Array<Record<string, unknown>> = [];
+          const t0 = performance.now();
+          if (import.meta.env.DEV) {
+            (window as unknown as Record<string, unknown>).__landingDebug = { rowId, chunkIndex, events: dbg };
+          }
+          const trace = (phase: string, extra?: Record<string, unknown>) => {
+            if (import.meta.env.DEV) dbg.push({ t: Math.round(performance.now() - t0), phase, scrollTop: Math.round(container.scrollTop), ...extra });
+          };
+          trace('start');
+
+          const deadline = performance.now() + 4000;
           const step = () => {
             if (cancelled) return;
-            if (performance.now() > deadline) { endAutoScroll(); return; }
+            if (performance.now() > deadline) { trace('deadline-giveup'); endAutoScroll(); return; }
+
             const el = container.querySelector(`[data-row-id="${rowId}"]`);
-            if (el) {
-              const delta = offsetOf(el);
-              if (Math.abs(delta) <= 1) {
-                stable += 1;
-              } else {
-                const before = container.scrollTop;
-                container.scrollTo({ top: Math.max(0, before + delta), behavior: 'auto' });
-                // Clamped at an edge (e.g. a tap near the very end of the
-                // book): the row can never reach the top — count as landed
-                // instead of spinning until the deadline.
-                stable = container.scrollTop === before ? stable + 1 : 0;
+            if (el && !offsetIssued) {
+              const item = el.closest('[data-index]');
+              if (item) {
+                offsetIssued = true;
+                const offset = Math.round(
+                  el.getBoundingClientRect().top - item.getBoundingClientRect().top
+                ) - 8;
+                trace('offset-issued', { offset, delta: Math.round(offsetOf(el)) });
+                virtuosoRef.current?.scrollToIndex({
+                  index: chunkIndex,
+                  behavior: 'auto',
+                  align: 'start',
+                  offset,
+                });
+                stillFrames = 0;
+                lastScrollTop = -1;
               }
-              if (stable >= 3) { endAutoScroll(); return; }
+            }
+
+            // Watch for stillness: scrollTop unchanged for 3 consecutive
+            // frames means virtuoso's correction cycle is idle right now.
+            const st = container.scrollTop;
+            stillFrames = st === lastScrollTop ? stillFrames + 1 : 0;
+            lastScrollTop = st;
+
+            // RECOVERY: the layout can slide by thousands of px when estimated
+            // chunks above get their real heights AFTER our jump (mega-chunks
+            // from span absorption make this violent on first visits). If that
+            // shift carried the viewport away, the target chunk unmounts and
+            // the cell disappears — so once the scroller is provably idle with
+            // no cell in sight, we re-approach: jump to the chunk again (each
+            // pass benefits from the measurements the previous one caused),
+            // then re-offset and re-verify.
+            if (!el && stillFrames >= 3) {
+              if (approaches < 4) {
+                approaches += 1;
+                offsetIssued = false;
+                trace('re-approach', { approaches });
+                virtuosoRef.current?.scrollToIndex({ index: chunkIndex, behavior: 'auto', align: 'start' });
+                stillFrames = 0;
+                lastScrollTop = -1;
+              } else {
+                trace('giveup-no-cell');
+                endAutoScroll();
+                return;
+              }
+            }
+
+            if (offsetIssued && el && stillFrames >= 3) {
+              const delta = offsetOf(el);
+              if (Math.abs(delta) <= 1) { trace('landed', { delta: Math.round(delta) }); endAutoScroll(); return; }
+              trace('still-but-off', { delta: Math.round(delta), corrections });
+              if (corrections < 5) {
+                // Safe to nudge: the other driver is idle. Acting only during
+                // proven stillness is what makes a fight impossible.
+                corrections += 1;
+                container.scrollTo({ top: Math.max(0, st + delta), behavior: 'auto' });
+                if (container.scrollTop === st) {
+                  // Clamped at an edge (tap near the very end of the book):
+                  // the row can never reach the top — this is the best spot.
+                  trace('clamped-done');
+                  endAutoScroll();
+                  return;
+                }
+                stillFrames = 0;
+              } else {
+                trace('corrections-exhausted');
+                endAutoScroll();
+                return;
+              }
             }
             raf = requestAnimationFrame(step);
           };
