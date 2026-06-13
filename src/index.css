@@ -1,21 +1,23 @@
 @import "tailwindcss";
 
 @theme {
-  --color-parchment: #FAF6EE;
-  --color-parchment-light: #FFFDF7;
-  --color-parchment-dark: #F5EDE0;
-  --color-border-warm: #D4C5A9;
-  --color-border-light: #EDE8DC;
-  --color-text-warm: #2C2416;
-  --color-text-muted: #8B7355;
-  --color-text-faint: #A09080;
+  --color-parchment: #FFFFFF;
+  --color-parchment-light: #FFFFFF;
+  --color-parchment-dark: #F7F6F4;
+  --color-border-warm: #E3E0DB;
+  --color-border-light: #EFEEEB;
+  --color-text-warm: #1F1F1F;
+  --color-text-muted: #6A6660;
+  --color-text-faint: #9B968F;
 
-  --color-dark-bg: #1A1612;
-  --color-dark-card: #1F1B16;
-  --color-dark-surface: #252019;
-  --color-dark-border: #3D3529;
-  --color-dark-text: #E8DCC8;
-  --color-dark-muted: #9B8E7A;
+  --color-dark-bg: #161618;
+  --color-dark-card: #1B1B1E;
+  --color-dark-surface: #1F1F22;
+  --color-dark-border: #34343A;
+  --color-dark-text: #ECEAE6;
+  --color-dark-muted: #A7A29B;
+
+  --color-burgundy: #7A1F2B;
 
   --color-gospel-mt: #8B4513;
   --color-gospel-mc: #2F5233;
@@ -70,7 +72,7 @@ body {
 }
 
 @keyframes highlightFade {
-  0% { background-color: rgba(255, 234, 167, 0.5); }
+  0% { background-color: rgba(154, 58, 69, 0.18); }
   100% { background-color: transparent; }
 }
 .highlight-flash {
