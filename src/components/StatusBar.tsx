@@ -32,8 +32,8 @@ export function StatusBar({ theme, progress }: StatusBarProps) {
         height: 'calc(36px + env(safe-area-inset-bottom, 0px))',
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         background: theme.isDark
-          ? 'rgba(26,22,18,0.85)'
-          : 'rgba(250,246,238,0.85)',
+          ? 'rgba(22,22,24,0.85)'
+          : 'rgba(255,255,255,0.85)',
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
         borderTop: `0.5px solid ${theme.border}`,

@@ -70,7 +70,7 @@ export function Sidebar({ theme, onGoToRow }: SidebarProps) {
       style={{
         width: SIDEBAR_WIDTH,
         height: '100%',
-        background: theme.isDark ? 'rgba(31,27,22,0.96)' : 'rgba(253,248,240,0.96)',
+        background: theme.isDark ? 'rgba(27,27,30,0.96)' : 'rgba(255,255,255,0.97)',
         borderRight: `0.5px solid ${theme.border}`,
         display: 'flex',
         flexDirection: 'column',

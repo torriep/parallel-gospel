@@ -70,8 +70,8 @@ export function PericopeChunk({
                     padding: '6px 16px',
                     textAlign: 'center',
                     background: theme.isDark
-                      ? 'rgba(60, 50, 35, 0.4)'
-                      : 'rgba(245, 230, 200, 0.25)',
+                      ? 'rgba(122,31,43,0.22)'
+                      : 'rgba(122,31,43,0.06)',
                     borderTop: `1px solid ${theme.borderLight}`,
                     borderBottom: `1px solid ${theme.borderLight}`,
                   }}

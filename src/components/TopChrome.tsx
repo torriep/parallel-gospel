@@ -32,8 +32,8 @@ export function TopChrome({ theme, onVerseSelect }: TopChromeProps) {
     return () => window.removeEventListener('resize', update);
   }, [picker]);
 
-  const bg = theme.isDark ? 'rgba(26,22,18,0.78)' : 'rgba(250,246,238,0.82)';
-  const border = theme.isDark ? 'rgba(60,52,42,0.5)' : 'rgba(212,197,169,0.4)';
+  const bg = theme.isDark ? 'rgba(22,22,24,0.78)' : 'rgba(255,255,255,0.82)';
+  const border = theme.isDark ? 'rgba(52,52,58,0.5)' : 'rgba(227,224,219,0.55)';
 
   return (
     <div
