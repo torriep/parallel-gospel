@@ -183,7 +183,7 @@ export function SearchPanel({ onClose, onGoToRow, theme }: SearchPanelProps) {
                       <div style={{ fontSize: fs(13), color: theme.text, lineHeight: 1.5 }}>
                         ...{before}
                         <span style={{
-                          background: '#FFEAA7', color: '#000', fontWeight: 600,
+                          background: '#F4CCD3', color: '#5E1721', fontWeight: 600,
                           padding: '0 1px', borderRadius: 2,
                         }}>{match}</span>
                         {after}...
