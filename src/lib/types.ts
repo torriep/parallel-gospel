@@ -126,15 +126,16 @@ export const GOSPEL_MONOGRAMS: Record<GospelKey, string> = {
 };
 
 export const TRANSLATIONS: TranslationInfo[] = [
-  { code: 'LSG', name: 'Louis Segond 1910', language: 'FR', file: 'parallel-gospel-LSG.json' },
-  { code: 'FRLSG', name: 'Louis Segond (API)', language: 'FR', file: 'parallel-gospel-FRLSG.json' },
-  { code: 'FRDBY', name: 'Bible Darby', language: 'FR', file: 'parallel-gospel-FRDBY.json' },
   { code: 'KJV', name: 'King James Version', language: 'EN', file: 'parallel-gospel-KJV.json' },
+  { code: 'RNKJV', name: 'Restored Name KJV', language: 'EN', file: 'parallel-gospel-RNKJV.json' },
   { code: 'ASV', name: 'American Standard Version', language: 'EN', file: 'parallel-gospel-ASV.json' },
   { code: 'WEB', name: 'World English Bible', language: 'EN', file: 'parallel-gospel-WEB.json' },
-  { code: 'YLT', name: "Young's Literal Translation", language: 'EN', file: 'parallel-gospel-YLT.json' },
-  { code: 'DRB', name: 'Douay-Rheims Bible', language: 'EN', file: 'parallel-gospel-DRB.json' },
+  { code: 'NHEB', name: 'New Heart English Bible', language: 'EN', file: 'parallel-gospel-NHEB.json' },
   { code: 'BSB', name: 'Berean Standard Bible', language: 'EN', file: 'parallel-gospel-BSB.json' },
+  { code: 'LEB', name: 'Lexham English Bible', language: 'EN', file: 'parallel-gospel-LEB.json' },
+  { code: 'BBE', name: 'Bible in Basic English', language: 'EN', file: 'parallel-gospel-BBE.json' },
+  { code: 'DARBY', name: 'Darby Bible', language: 'EN', file: 'parallel-gospel-DARBY.json' },
+  { code: 'YLT', name: "Young's Literal Translation", language: 'EN', file: 'parallel-gospel-YLT.json' },
 ];
 
 export const HIGHLIGHT_COLORS = [

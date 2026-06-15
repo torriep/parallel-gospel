@@ -145,6 +145,19 @@ export function SettingsPanel({ theme, onClose }: SettingsPanelProps) {
         ))}
       </div>
 
+      {/* Translation credits / attributions. */}
+      <div
+        style={{
+          padding: '6px 16px 0',
+          fontSize: fs(11),
+          lineHeight: 1.5,
+          color: theme.textFaint,
+          textAlign: 'center',
+        }}
+      >
+        Scripture texts are public-domain editions, except the Lexham English Bible (LEB), © Logos Bible Software, used by permission.
+      </div>
+
       {/* Build stamp — which exact code this build contains. */}
       <div
         style={{

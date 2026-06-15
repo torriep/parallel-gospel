@@ -44,7 +44,7 @@ function App() {
 
   useEffect(() => {
     loadSettings();
-    loadTranslation('LSG');
+    loadTranslation('KJV');
     loadUserData();
   }, []);
 

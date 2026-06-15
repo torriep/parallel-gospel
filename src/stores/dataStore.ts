@@ -28,6 +28,11 @@ const translationFiles: Record<string, () => Promise<TranslationData>> = {
   YLT: () => import('../data/parallel-gospel-YLT.json').then(m => m.default as unknown as TranslationData),
   DRB: () => import('../data/parallel-gospel-DRB.json').then(m => m.default as unknown as TranslationData),
   BSB: () => import('../data/parallel-gospel-BSB.json').then(m => m.default as unknown as TranslationData),
+  DARBY: () => import('../data/parallel-gospel-DARBY.json').then(m => m.default as unknown as TranslationData),
+  BBE: () => import('../data/parallel-gospel-BBE.json').then(m => m.default as unknown as TranslationData),
+  NHEB: () => import('../data/parallel-gospel-NHEB.json').then(m => m.default as unknown as TranslationData),
+  RNKJV: () => import('../data/parallel-gospel-RNKJV.json').then(m => m.default as unknown as TranslationData),
+  LEB: () => import('../data/parallel-gospel-LEB.json').then(m => m.default as unknown as TranslationData),
 };
 
 function resolvePericopeRows(chapterIndex: ChapterIndex): (Pericope & { startRow: number })[] {
@@ -46,7 +51,7 @@ function resolvePericopeRows(chapterIndex: ChapterIndex): (Pericope & { startRow
 let rowIdToIndex: Map<number, number> = new Map();
 
 export const useDataStore = create<DataState>((set, get) => ({
-  translationCode: 'LSG',
+  translationCode: 'KJV',
   translationData: null,
   secondaryData: null,
   rows: [],
