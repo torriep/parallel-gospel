@@ -70,7 +70,7 @@ const STRINGS = {
   'sidebar.navigation':    { fr: 'Navigation',  en: 'Navigation' },
   'sidebar.close':         { fr: 'Fermer',      en: 'Close' },
   'sidebar.bookmarks':     { fr: 'Signets',     en: 'Bookmarks' },
-  'sidebar.pericopeCount': { fr: 'péricopes',   en: 'pericopes' },
+  'sidebar.pericopeCount': { fr: 'scènes',   en: 'scenes' },
 
   // Gospel x-ray (overview strip)
   'xray.label': { fr: 'Aperçu de la concordance — toucher ou glisser pour naviguer', en: 'Harmony overview — tap or drag to navigate' },
@@ -90,11 +90,11 @@ const STRINGS = {
   'settings.none':                 { fr: 'Aucune',                  en: 'None' },
 
   // Search panel
-  'search.placeholder':   { fr: 'Rechercher une péricope ou un mot...', en: 'Search a pericope or a word...' },
+  'search.placeholder':   { fr: 'Rechercher une scène ou un mot...', en: 'Search a scene or a word...' },
   'search.cancel':        { fr: 'Annuler',                              en: 'Cancel' },
-  'search.hint':          { fr: 'Cherchez une péricope ou un mot dans les versets.', en: 'Search a pericope or a word in the verses.' },
+  'search.hint':          { fr: 'Cherchez une scène ou un mot dans les versets.', en: 'Search a scene or a word in the verses.' },
   'search.noResults':     { fr: 'Aucun résultat pour',                  en: 'No results for' },
-  'search.pericopes':     { fr: 'Péricopes',                            en: 'Pericopes' },
+  'search.pericopes':     { fr: 'Scènes',                            en: 'Scenes' },
   'search.verses':        { fr: 'Versets',                              en: 'Verses' },
   'search.unique':        { fr: 'unique',                               en: 'unique' },
   'search.gospelCount':   { fr: 'évangiles',                            en: 'gospels' },
