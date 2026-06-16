@@ -59,7 +59,13 @@ function App() {
   }, [currentRowId, rows]);
 
   const scrollToRow = useCallback((rowId: number, opts?: { instant?: boolean }) => {
-    gridRef.current?.scrollToRow(rowId, opts);
+    // Default ALL navigation (verse picker, sidebar, search, bookmarks, x-ray)
+    // to the converging "instant" landing — it jumps then self-corrects so the
+    // target row holds the top through virtuoso's re-measures. The old smooth
+    // path fired one scroll and never re-checked, so first-visit regions (deep
+    // verses like Mt 10:13) drifted past the top and landed off-screen. A
+    // caller can still opt back into smooth by passing { instant: false }.
+    gridRef.current?.scrollToRow(rowId, { instant: true, ...opts });
     setHighlightedRowId(rowId);
     setTimeout(() => setHighlightedRowId(null), 2000);
   }, [setHighlightedRowId]);
