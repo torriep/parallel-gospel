@@ -40,6 +40,12 @@ interface AppState {
   // reading scroll.
   sidebarRevealRowId: number | null;
   sidebarRevealNonce: number;
+  // EXPERIMENT (throwaway): render the whole harmony into the DOM at once
+  // (content-visibility:auto) instead of virtualizing. Behind this flag so the
+  // shipping path is untouched when off. renderAllBuildMs is the measured time
+  // to build+paint the full tree, shown in the metrics HUD.
+  renderAllMode: boolean;
+  renderAllBuildMs: number | null;
   currentRefs: Record<GospelKey, string | null>;
 
   // Actions
@@ -63,6 +69,8 @@ interface AppState {
   setVisibleRange: (first: number | null, last: number | null) => void;
   setAutoScrolling: (b: boolean) => void;
   revealInSidebar: (rowId: number) => void;
+  toggleRenderAllMode: () => void;
+  setRenderAllBuildMs: (ms: number | null) => void;
   setCurrentRefs: (refs: Record<GospelKey, string | null>) => void;
   loadSettings: () => Promise<void>;
 }
@@ -92,6 +100,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   isAutoScrolling: false,
   sidebarRevealRowId: null,
   sidebarRevealNonce: 0,
+  renderAllMode: false,
+  renderAllBuildMs: null,
   currentRefs: { MT: null, MC: null, LC: null, JN: null },
 
   toggleDarkMode: () => {
@@ -132,6 +142,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   ),
   setAutoScrolling: (b) => set(s => s.isAutoScrolling === b ? s : { isAutoScrolling: b }),
   revealInSidebar: (rowId) => set(s => ({ sidebarRevealRowId: rowId, sidebarRevealNonce: s.sidebarRevealNonce + 1 })),
+  toggleRenderAllMode: () => {
+    const newVal = !get().renderAllMode;
+    set({ renderAllMode: newVal, renderAllBuildMs: null });
+    db.settings.put({ id: 'renderAllMode', value: JSON.stringify(newVal) });
+  },
+  setRenderAllBuildMs: (ms) => set({ renderAllBuildMs: ms }),
   setCurrentRefs: (refs) => set({ currentRefs: refs }),
 
   loadSettings: async () => {
@@ -144,6 +160,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         if (s.id === 'fontDelta') updates.fontDelta = val;
         if (s.id === 'secondaryTranslation') updates.secondaryTranslation = val;
         if (s.id === 'lastScrollPosition') updates.lastScrollPosition = val;
+        if (s.id === 'renderAllMode') updates.renderAllMode = val;
       }
       set(updates);
     } catch {

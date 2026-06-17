@@ -9,6 +9,8 @@ import { useT } from './lib/i18n';
 
 import { TopChrome } from './components/TopChrome';
 import { VerseGrid, type VerseGridHandle } from './components/VerseGrid';
+import { VerseGridAll } from './components/VerseGridAll';
+import { RenderMetricsHud } from './components/RenderMetricsHud';
 import { StatusBar } from './components/StatusBar';
 import { FocusCard } from './components/FocusCard';
 import { SearchPanel } from './components/SearchPanel';
@@ -29,7 +31,7 @@ function App() {
     showReadingPlans, setShowReadingPlans,
     showSettings, setShowSettings,
     setHighlightedRowId, setCurrentRefs, revealInSidebar,
-    currentRowId, fontDelta, systemFontBase,
+    currentRowId, fontDelta, systemFontBase, renderAllMode,
   } = useAppStore();
 
   const { loadTranslation, rows, isLoading, findRowByRef } = useDataStore();
@@ -154,12 +156,21 @@ function App() {
         }}
       >
         <TopChrome theme={theme} onVerseSelect={handleVerseSelect} />
-        <VerseGrid
-          ref={gridRef}
-          theme={theme}
-          onRowTap={handleRowTap}
-          onRowLongPress={handleRowLongPress}
-        />
+        {renderAllMode ? (
+          <VerseGridAll
+            ref={gridRef}
+            theme={theme}
+            onRowTap={handleRowTap}
+            onRowLongPress={handleRowLongPress}
+          />
+        ) : (
+          <VerseGrid
+            ref={gridRef}
+            theme={theme}
+            onRowTap={handleRowTap}
+            onRowLongPress={handleRowLongPress}
+          />
+        )}
         <StatusBar theme={theme} progress={readProgress} />
 
         {showSettings && (
@@ -195,6 +206,8 @@ function App() {
           theme={theme}
         />
       )}
+
+      {renderAllMode && <RenderMetricsHud theme={theme} />}
     </div>
   );
 }

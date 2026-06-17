@@ -30,6 +30,8 @@ export function SettingsPanel({ theme, onClose }: SettingsPanelProps) {
   const systemFontBase = useAppStore(s => s.systemFontBase);
   const secondaryTranslation = useAppStore(s => s.secondaryTranslation);
   const setSecondaryTranslation = useAppStore(s => s.setSecondaryTranslation);
+  const renderAllMode = useAppStore(s => s.renderAllMode);
+  const toggleRenderAllMode = useAppStore(s => s.toggleRenderAllMode);
   const { translationCode, loadTranslation, loadSecondaryTranslation } = useDataStore();
 
   const ref = useRef<HTMLDivElement>(null);
@@ -143,6 +145,15 @@ export function SettingsPanel({ theme, onClose }: SettingsPanelProps) {
             )}
           </button>
         ))}
+      </div>
+
+      {/* EXPERIMENT (throwaway): toggle the render-all renderer + metrics HUD. */}
+      <SectionTitle theme={theme}>{tr('settings.experimental')}</SectionTitle>
+      <div style={{ display: 'flex', gap: 8, padding: '0 16px 12px' }}>
+        <SegBtn theme={theme} active={renderAllMode} onClick={toggleRenderAllMode}>
+          <DiffIcon size={18} color={renderAllMode ? theme.gospelColors.JN : theme.textMuted} />
+          <span>{tr('settings.renderAll')}</span>
+        </SegBtn>
       </div>
 
       {/* Translation credits / attributions. */}

@@ -88,6 +88,8 @@ const STRINGS = {
   'settings.primaryTranslation':   { fr: 'Traduction principale',   en: 'Primary translation' },
   'settings.comparativeTranslation': { fr: 'Traduction comparative', en: 'Comparative translation' },
   'settings.none':                 { fr: 'Aucune',                  en: 'None' },
+  'settings.experimental':         { fr: 'Expérimental',            en: 'Experimental' },
+  'settings.renderAll':            { fr: 'Tout afficher (test)',    en: 'Render all (test)' },
 
   // Search panel
   'search.placeholder':   { fr: 'Rechercher une scène ou un mot...', en: 'Search a scene or a word...' },
