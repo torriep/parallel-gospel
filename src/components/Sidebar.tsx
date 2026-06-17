@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '../stores/appStore';
 import { useDataStore } from '../stores/dataStore';
 import { useUserDataStore } from '../stores/userDataStore';
@@ -22,6 +22,8 @@ export function Sidebar({ theme, onGoToRow }: SidebarProps) {
   const setShowSidebar = useAppStore(s => s.setShowSidebar);
   const setShowBookmarks = useAppStore(s => s.setShowBookmarks);
   const currentRowId = useAppStore(s => s.currentRowId);
+  const sidebarRevealRowId = useAppStore(s => s.sidebarRevealRowId);
+  const sidebarRevealNonce = useAppStore(s => s.sidebarRevealNonce);
   const pericopes = useDataStore(s => s.pericopes);
   const bookmarkCount = useUserDataStore(s => s.bookmarks.length);
   const language = useLanguage();
@@ -29,6 +31,13 @@ export function Sidebar({ theme, onGoToRow }: SidebarProps) {
   const fs = useFontScale();
 
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+
+  // Scroll container for the scene list + a ref to each scene button, so a
+  // reveal can expand the right category and centre the scene.
+  const listRef = useRef<HTMLDivElement>(null);
+  const btnRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  // The scene id waiting to be centred once its category has expanded/rendered.
+  const pendingRevealRef = useRef<string | null>(null);
 
   // Group pericopes by phase, in order
   const grouped = useMemo(() => {
@@ -56,6 +65,49 @@ export function Sidebar({ theme, onGoToRow }: SidebarProps) {
     }
     return bestId;
   }, [pericopes, currentRowId]);
+
+  // On a reveal signal (x-ray / search / bookmarks / verse picker — see App's
+  // scrollToRow), find the scene jumped to, open its category, and mark it to
+  // be centred. Driven by the nonce so re-jumping to the same spot re-fires.
+  useEffect(() => {
+    if (sidebarRevealRowId == null) return;
+    let bestId: string | null = null;
+    let bestPhase: string | null = null;
+    let bestStart = -Infinity;
+    for (const p of pericopes) {
+      if (p.startRow != null && p.startRow <= sidebarRevealRowId && p.startRow > bestStart) {
+        bestStart = p.startRow;
+        bestId = p.id;
+        bestPhase = p.phase;
+      }
+    }
+    if (!bestId || !bestPhase) return;
+    pendingRevealRef.current = bestId;
+    const phase = bestPhase;
+    setCollapsed(c => (c[phase] ? { ...c, [phase]: false } : c));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sidebarRevealNonce]);
+
+  // After the category has (re)rendered, centre the pending scene in the list.
+  // Depends on `collapsed` so it runs once the just-expanded category has
+  // mounted its scene buttons, and on the nonce so an already-open category
+  // still re-centres.
+  useEffect(() => {
+    const id = pendingRevealRef.current;
+    if (!id) return;
+    const raf = requestAnimationFrame(() => {
+      const container = listRef.current;
+      const btn = btnRefs.current[id];
+      if (container && btn) {
+        const cRect = container.getBoundingClientRect();
+        const bRect = btn.getBoundingClientRect();
+        const delta = (bRect.top - cRect.top) - (container.clientHeight / 2 - bRect.height / 2);
+        container.scrollTo({ top: container.scrollTop + delta, behavior: 'smooth' });
+      }
+      pendingRevealRef.current = null;
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [collapsed, sidebarRevealNonce]);
 
   const isCompact = widthClass === 'compact';
   const isOpen = showSidebar;
@@ -127,7 +179,7 @@ export function Sidebar({ theme, onGoToRow }: SidebarProps) {
       </div>
 
       {/* Pericope list */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '6px 6px 16px' }}>
+      <div ref={listRef} style={{ flex: 1, overflowY: 'auto', padding: '6px 6px 16px' }}>
         {TIMELINE_PHASES.map(phase => {
           const items = grouped[phase.id] ?? [];
           if (items.length === 0) return null;
@@ -176,6 +228,7 @@ export function Sidebar({ theme, onGoToRow }: SidebarProps) {
                     return (
                       <button
                         key={p.id}
+                        ref={el => { btnRefs.current[p.id] = el; }}
                         onClick={() => handleGo(p.startRow)}
                         style={{
                           display: 'block',

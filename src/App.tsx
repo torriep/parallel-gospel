@@ -28,7 +28,7 @@ function App() {
     showBookmarks, setShowBookmarks,
     showReadingPlans, setShowReadingPlans,
     showSettings, setShowSettings,
-    setHighlightedRowId, setCurrentRefs,
+    setHighlightedRowId, setCurrentRefs, revealInSidebar,
     currentRowId, fontDelta, systemFontBase,
   } = useAppStore();
 
@@ -58,7 +58,7 @@ function App() {
     }
   }, [currentRowId, rows]);
 
-  const scrollToRow = useCallback((rowId: number, opts?: { instant?: boolean }) => {
+  const scrollToRow = useCallback((rowId: number, opts?: { instant?: boolean; reveal?: boolean }) => {
     // Default ALL navigation (verse picker, sidebar, search, bookmarks, x-ray)
     // to the converging "instant" landing — it jumps then self-corrects so the
     // target row holds the top through virtuoso's re-measures. The old smooth
@@ -68,7 +68,11 @@ function App() {
     gridRef.current?.scrollToRow(rowId, { instant: true, ...opts });
     setHighlightedRowId(rowId);
     setTimeout(() => setHighlightedRowId(null), 2000);
-  }, [setHighlightedRowId]);
+    // Ask the sidebar (scene selector) to expand the target scene's category
+    // and centre it. Skipped for sidebar taps (opts.reveal === false) so the
+    // scene you just tapped doesn't jump to the middle under your finger.
+    if (opts?.reveal !== false) revealInSidebar(rowId);
+  }, [setHighlightedRowId, revealInSidebar]);
 
   const handleVerseSelect = useCallback((gospel: GospelKey, chapter: number, verse: number) => {
     const rowId = findRowByRef(gospel, chapter, verse);
@@ -139,7 +143,7 @@ function App() {
       }}
     >
       <GospelXray theme={theme} onGoToRow={scrollToRow} />
-      <Sidebar theme={theme} onGoToRow={scrollToRow} />
+      <Sidebar theme={theme} onGoToRow={(rowId) => scrollToRow(rowId, { reveal: false })} />
 
       <div
         style={{

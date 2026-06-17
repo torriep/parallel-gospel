@@ -32,6 +32,14 @@ interface AppState {
   // band freezes while this is true and resumes tracking the viewport once the
   // scroll has actually settled.
   isAutoScrolling: boolean;
+  // Signal asking the Sidebar (scene selector) to expand the target scene's
+  // category and scroll it to the centre of the list. Carries the row jumped
+  // to; the nonce lets the same row re-trigger the reveal (e.g. tapping the
+  // same x-ray spot twice). Fired by explicit jumps (x-ray, search, bookmarks,
+  // verse picker) but NOT by tapping a scene inside the sidebar, nor by manual
+  // reading scroll.
+  sidebarRevealRowId: number | null;
+  sidebarRevealNonce: number;
   currentRefs: Record<GospelKey, string | null>;
 
   // Actions
@@ -54,6 +62,7 @@ interface AppState {
   setCurrentRowId: (id: number) => void;
   setVisibleRange: (first: number | null, last: number | null) => void;
   setAutoScrolling: (b: boolean) => void;
+  revealInSidebar: (rowId: number) => void;
   setCurrentRefs: (refs: Record<GospelKey, string | null>) => void;
   loadSettings: () => Promise<void>;
 }
@@ -81,6 +90,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   visibleFirstRowId: null,
   visibleLastRowId: null,
   isAutoScrolling: false,
+  sidebarRevealRowId: null,
+  sidebarRevealNonce: 0,
   currentRefs: { MT: null, MC: null, LC: null, JN: null },
 
   toggleDarkMode: () => {
@@ -120,6 +131,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       : { visibleFirstRowId: first, visibleLastRowId: last }
   ),
   setAutoScrolling: (b) => set(s => s.isAutoScrolling === b ? s : { isAutoScrolling: b }),
+  revealInSidebar: (rowId) => set(s => ({ sidebarRevealRowId: rowId, sidebarRevealNonce: s.sidebarRevealNonce + 1 })),
   setCurrentRefs: (refs) => set({ currentRefs: refs }),
 
   loadSettings: async () => {
