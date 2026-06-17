@@ -207,7 +207,7 @@ function App() {
         />
       )}
 
-      {renderAllMode && <RenderMetricsHud theme={theme} />}
+      {import.meta.env.DEV && renderAllMode && <RenderMetricsHud theme={theme} />}
     </div>
   );
 }

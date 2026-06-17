@@ -147,14 +147,20 @@ export function SettingsPanel({ theme, onClose }: SettingsPanelProps) {
         ))}
       </div>
 
-      {/* EXPERIMENT (throwaway): toggle the render-all renderer + metrics HUD. */}
-      <SectionTitle theme={theme}>{tr('settings.experimental')}</SectionTitle>
-      <div style={{ display: 'flex', gap: 8, padding: '0 16px 12px' }}>
-        <SegBtn theme={theme} active={renderAllMode} onClick={toggleRenderAllMode}>
-          <DiffIcon size={18} color={renderAllMode ? theme.gospelColors.JN : theme.textMuted} />
-          <span>{tr('settings.renderAll')}</span>
-        </SegBtn>
-      </div>
+      {/* DEV-ONLY: force the renderer for testing both paths. In production the
+          renderer is chosen automatically by device capability (content-visibility),
+          so this toggle and the metrics HUD never ship to users. */}
+      {import.meta.env.DEV && (
+        <>
+          <SectionTitle theme={theme}>{tr('settings.experimental')}</SectionTitle>
+          <div style={{ display: 'flex', gap: 8, padding: '0 16px 12px' }}>
+            <SegBtn theme={theme} active={renderAllMode} onClick={toggleRenderAllMode}>
+              <DiffIcon size={18} color={renderAllMode ? theme.gospelColors.JN : theme.textMuted} />
+              <span>{tr('settings.renderAll')}</span>
+            </SegBtn>
+          </div>
+        </>
+      )}
 
       {/* Translation credits / attributions. */}
       <div

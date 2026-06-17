@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { GospelKey } from '../lib/types';
 import { db } from '../lib/db';
+import { supportsContentVisibility } from '../lib/capabilities';
 
 interface AppState {
   isDarkMode: boolean;
@@ -40,10 +41,11 @@ interface AppState {
   // reading scroll.
   sidebarRevealRowId: number | null;
   sidebarRevealNonce: number;
-  // EXPERIMENT (throwaway): render the whole harmony into the DOM at once
-  // (content-visibility:auto) instead of virtualizing. Behind this flag so the
-  // shipping path is untouched when off. renderAllBuildMs is the measured time
-  // to build+paint the full tree, shown in the metrics HUD.
+  // Which renderer is active. DEFAULT = device capability: render the whole
+  // harmony into the DOM (content-visibility:auto, VerseGridAll) where supported,
+  // else the virtualized VerseGrid. Not persisted — capability decides on every
+  // launch. The dev-only Settings toggle flips it for testing both paths.
+  // renderAllBuildMs = measured build→paint time, shown in the dev metrics HUD.
   renderAllMode: boolean;
   renderAllBuildMs: number | null;
   currentRefs: Record<GospelKey, string | null>;
@@ -100,7 +102,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   isAutoScrolling: false,
   sidebarRevealRowId: null,
   sidebarRevealNonce: 0,
-  renderAllMode: false,
+  renderAllMode: supportsContentVisibility,
   renderAllBuildMs: null,
   currentRefs: { MT: null, MC: null, LC: null, JN: null },
 
@@ -142,11 +144,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   ),
   setAutoScrolling: (b) => set(s => s.isAutoScrolling === b ? s : { isAutoScrolling: b }),
   revealInSidebar: (rowId) => set(s => ({ sidebarRevealRowId: rowId, sidebarRevealNonce: s.sidebarRevealNonce + 1 })),
-  toggleRenderAllMode: () => {
-    const newVal = !get().renderAllMode;
-    set({ renderAllMode: newVal, renderAllBuildMs: null });
-    db.settings.put({ id: 'renderAllMode', value: JSON.stringify(newVal) });
-  },
+  // Dev-only override (not persisted): flip renderer to test both paths.
+  toggleRenderAllMode: () => set(s => ({ renderAllMode: !s.renderAllMode, renderAllBuildMs: null })),
   setRenderAllBuildMs: (ms) => set({ renderAllBuildMs: ms }),
   setCurrentRefs: (refs) => set({ currentRefs: refs }),
 
@@ -160,7 +159,6 @@ export const useAppStore = create<AppState>((set, get) => ({
         if (s.id === 'fontDelta') updates.fontDelta = val;
         if (s.id === 'secondaryTranslation') updates.secondaryTranslation = val;
         if (s.id === 'lastScrollPosition') updates.lastScrollPosition = val;
-        if (s.id === 'renderAllMode') updates.renderAllMode = val;
       }
       set(updates);
     } catch {
