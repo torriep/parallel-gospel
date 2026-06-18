@@ -202,9 +202,16 @@ export const VerseGridAll = forwardRef<VerseGridHandle, VerseGridAllProps>(funct
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // scrollToRow: the target ALWAYS exists in the DOM, so this is just
-  // scrollIntoView. No mount race, no convergence loop. isAutoScrolling is
-  // toggled so the x-ray band freezes during the jump and resumes after.
+  // scrollToRow: the target ALWAYS exists in the DOM, but its position is NOT
+  // stable on a first visit. Chunks above the target are skipped by
+  // `content-visibility: auto` and sized by the 88px/row ESTIMATE; as they
+  // enter the rendering margin they lay out for real and their true height
+  // (long discourses like Mt 10 run well over 88px/row) shifts the document,
+  // so a single jump drifts the target off-screen. So we CONVERGE: jump, then
+  // re-measure over a few frames and nudge scrollTop until the row's top holds
+  // at the 8px offset and stays put. isAutoScrolling is toggled so the x-ray
+  // band freezes during the jump and resumes after.
+  const landingRef = useRef<number | null>(null);
   useImperativeHandle(
     ref,
     () => ({
@@ -214,16 +221,54 @@ export const VerseGridAll = forwardRef<VerseGridHandle, VerseGridAllProps>(funct
         const instant = !!opts?.instant;
         useAppStore.getState().setAutoScrolling(true);
         setCurrentRowId(rowId);
-        const jump = () => {
+
+        // A new command supersedes any landing still in progress.
+        if (landingRef.current != null) cancelAnimationFrame(landingRef.current);
+
+        const TARGET_OFFSET = 8; // row top sits 8px below the scroller top
+        const TOL = 2;           // within 2px counts as "on target"
+        const t0 = performance.now();
+
+        // Smooth (explicit { instant: false }) just fires once — re-scrolling
+        // mid-animation would fight the browser. All in-app nav uses instant.
+        const smooth = () => {
           const el = container.querySelector(`[data-row-id="${rowId}"]`) as HTMLElement | null;
-          if (!el) return false;
-          const top = el.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop - 8;
-          container.scrollTo({ top: Math.max(0, top), behavior: instant ? 'auto' : 'smooth' });
-          return true;
+          if (!el) { landingRef.current = requestAnimationFrame(smooth); return; }
+          const top = el.getBoundingClientRect().top - container.getBoundingClientRect().top
+            + container.scrollTop - TARGET_OFFSET;
+          container.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+          landingRef.current = null;
+          useAppStore.getState().setAutoScrolling(false);
         };
-        // One retry next frame in case content-visibility hasn't laid the row out yet.
-        if (!jump()) requestAnimationFrame(jump);
-        setTimeout(() => useAppStore.getState().setAutoScrolling(false), instant ? 200 : 500);
+
+        // Instant: converge. Re-check the row's top each frame and nudge
+        // scrollTop. Stop once it's been on target for 2 consecutive frames,
+        // or after a 600ms safety cap so we never loop forever.
+        let onTargetFrames = 0;
+        const converge = () => {
+          const el = container.querySelector(`[data-row-id="${rowId}"]`) as HTMLElement | null;
+          if (!el) {
+            // Not laid out yet — wait a frame, but respect the safety cap.
+            if (performance.now() - t0 < 600) { landingRef.current = requestAnimationFrame(converge); }
+            else { landingRef.current = null; useAppStore.getState().setAutoScrolling(false); }
+            return;
+          }
+          const delta = el.getBoundingClientRect().top - container.getBoundingClientRect().top - TARGET_OFFSET;
+          if (Math.abs(delta) > TOL) {
+            container.scrollTop = Math.max(0, container.scrollTop + delta);
+            onTargetFrames = 0;
+          } else {
+            onTargetFrames++;
+          }
+          if (onTargetFrames < 2 && performance.now() - t0 < 600) {
+            landingRef.current = requestAnimationFrame(converge);
+          } else {
+            landingRef.current = null;
+            useAppStore.getState().setAutoScrolling(false);
+          }
+        };
+
+        landingRef.current = requestAnimationFrame(instant ? converge : smooth);
       },
     }),
     [setCurrentRowId]
