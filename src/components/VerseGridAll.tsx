@@ -211,24 +211,23 @@ export const VerseGridAll = forwardRef<VerseGridHandle, VerseGridAllProps>(funct
   // scrollToRow — land the target row at the top and KEEP it there, even on a
   // first visit.
   //
-  // The hard part is WebKit (our iPad WKWebView). Each scene wrapper uses
-  // `content-visibility: auto`, so an off-screen scene is sized by an ESTIMATE
-  // (88px/row) until it renders for real. On a first visit the scene just ABOVE
-  // the target snaps from estimate to its true (usually taller) height right
-  // after we jump, growing the document above the target. Blink hides this with
-  // scroll anchoring; WebKit has NO scroll anchoring, so the target is shoved
-  // off-screen and the user must scroll to find it — exactly the reported bug.
+  // Why the hand-rolled version failed on iPad (WebKit/WKWebView): scenes use
+  // `content-visibility: auto`, so an off-screen scene's INTERNAL layout is
+  // skipped and EVERY row inside it reports the SCENE's top for
+  // getBoundingClientRect. So our manual "scroll the row to offset 8" math
+  // happily parked the SCENE start at the top and saw delta≈0 — the verse sat
+  // a dozen rows below the fold (the reported bug). Blink lays the row out when
+  // queried, so it never showed there.
   //
-  // Fix in two parts:
-  //   1) PRE-RENDER a window of scenes around the target (force them out of
-  //      content-visibility skipping via `forcedVisible` state) so their real
-  //      heights are settled BEFORE we scroll. With nothing left to resize above
-  //      the target, the jump is stable. State-driven so the highlight-flash
-  //      re-render during the jump can't revert it.
-  //   2) CONVERGE: after landing, re-check every frame and nudge scrollTop,
-  //      staying vigilant for ~2.5s so any residual unanchored resize is caught.
-  // Scenes are restored to `auto` when the landing ends — their real size is now
-  // cached by `contain-intrinsic-size: auto`, so the restore causes no shift.
+  // Fix: delegate the scroll to the engine's native `scrollIntoView()`. The
+  // content-visibility spec guarantees scrollIntoView (like find-in-page) lays
+  // out and reveals skipped content correctly, in every engine. The 8px gap
+  // comes from `scroll-margin-top` on the row. We still force a window of scenes
+  // around the target out of skipping (`forcedVisible` state) so their real
+  // heights are settled first — WebKit has no scroll anchoring, so this stops an
+  // unanchored resize from nudging the target after it lands. A short verify
+  // loop re-issues scrollIntoView until the row holds the top; then the forced
+  // scenes return to `auto` (their real size is now cached, so no shift).
   const landingRef = useRef<number | null>(null);
   useImperativeHandle(
     ref,
@@ -236,22 +235,15 @@ export const VerseGridAll = forwardRef<VerseGridHandle, VerseGridAllProps>(funct
       scrollToRow: (rowId: number, opts?: { instant?: boolean }) => {
         const container = scrollerRef.current;
         if (!container) return;
-        const instant = !!opts?.instant;
+        const smooth = opts?.instant === false;
         useAppStore.getState().setAutoScrolling(true);
         setCurrentRowId(rowId);
 
         // A new command supersedes any landing still in progress.
         if (landingRef.current != null) cancelAnimationFrame(landingRef.current);
 
-        const TARGET_OFFSET = 8; // row top sits 8px below the scroller top
-        const TOL = 2;           // within 2px counts as "on target"
-
-        // Force the scenes around the target to real heights. We size the
-        // window in PIXELS (not a fixed scene count) so it always covers
-        // WebKit's render margin even where many short scenes stack up: expand
-        // up by ~1.5 viewports and down by ~1, using the same per-scene estimate
-        // the wrappers use. Any scene outside this window stays skipped AND
-        // stays outside the margin, so it can never resize after we land.
+        // Force the target's neighbourhood to real heights (pixel-sized window:
+        // ~1.5 viewports up, ~1 down) so nothing above can resize after landing.
         const targetIdx = pericopeChunks.findIndex(c => c.rows.some(r => r.id === rowId));
         if (targetIdx >= 0) {
           const vh = container.clientHeight || 800;
@@ -262,68 +254,35 @@ export const VerseGridAll = forwardRef<VerseGridHandle, VerseGridAllProps>(funct
           while (hi < pericopeChunks.length - 1 && accDown < vh) { hi++; accDown += estOf(hi); }
           setForcedVisible({ lo, hi });
         }
-        const clearForced = () => setForcedVisible(null);
 
-        const deadline = performance.now() + (instant ? 2500 : 900);
+        const deadline = performance.now() + 1800;
         const finish = () => {
           landingRef.current = null;
-          // Restore skipping a couple frames later so the final scroll settles
-          // first; cached real sizes mean no shift.
-          requestAnimationFrame(() => requestAnimationFrame(clearForced));
+          requestAnimationFrame(() => requestAnimationFrame(() => setForcedVisible(null)));
           useAppStore.getState().setAutoScrolling(false);
         };
 
-        const deltaOf = (el: Element) =>
-          el.getBoundingClientRect().top - container.getBoundingClientRect().top - TARGET_OFFSET;
-
-        // Smooth (explicit { instant: false }) just fires once — re-scrolling
-        // mid-animation would fight the browser. All in-app nav uses instant.
-        const smooth = () => {
+        let stable = 0;
+        const land = () => {
           const el = container.querySelector(`[data-row-id="${rowId}"]`) as HTMLElement | null;
           if (!el) {
-            if (performance.now() < deadline) { landingRef.current = requestAnimationFrame(smooth); return; }
-            finish(); return;
-          }
-          container.scrollTo({ top: Math.max(0, container.scrollTop + deltaOf(el)), behavior: 'smooth' });
-          finish();
-        };
-
-        // Instant: converge. Re-check the row's top each frame and nudge
-        // scrollTop. Declare done only after the row has HELD the offset for
-        // several consecutive frames (so a late, unanchored WebKit resize is
-        // still caught), or at the safety deadline.
-        let onTargetFrames = 0;
-        const converge = () => {
-          const el = container.querySelector(`[data-row-id="${rowId}"]`) as HTMLElement | null;
-          if (!el) {
-            if (performance.now() < deadline) { landingRef.current = requestAnimationFrame(converge); }
+            if (performance.now() < deadline) landingRef.current = requestAnimationFrame(land);
             else finish();
             return;
           }
-          const delta = deltaOf(el);
-          if (Math.abs(delta) > TOL) {
-            const prev = container.scrollTop;
-            container.scrollTop = Math.max(0, prev + delta);
-            onTargetFrames = 0;
-            // Clamped at an edge (target near the very end of the book): it can
-            // never reach the top, so this is the best spot — stop.
-            if (container.scrollTop === prev) { finish(); return; }
-          } else {
-            onTargetFrames++;
-          }
-          if (onTargetFrames < 6 && performance.now() < deadline) {
-            landingRef.current = requestAnimationFrame(converge);
-          } else {
-            finish();
-          }
+          // 8px gap, then let the ENGINE reveal the (possibly skipped) row —
+          // the part that works in WebKit where manual scrollTop math does not.
+          el.style.scrollMarginTop = '8px';
+          el.scrollIntoView({ block: 'start', inline: 'nearest', behavior: smooth ? 'smooth' : 'auto' });
+          if (smooth) { finish(); return; } // animation; re-issuing would restart it
+          // Verify against the real, now-laid-out position and hold a few frames
+          // so a late unanchored resize is re-corrected.
+          const top = el.getBoundingClientRect().top - container.getBoundingClientRect().top;
+          stable = Math.abs(top - 8) <= 2 ? stable + 1 : 0;
+          if (stable >= 3 || performance.now() > deadline) { finish(); return; }
+          landingRef.current = requestAnimationFrame(land);
         };
-
-        // Wait two frames so React commits `forcedVisible` and the forced scenes
-        // lay out for real before we measure.
-        const startTop = container.querySelector(`[data-row-id="${rowId}"]`);
-        const begin = () => { landingRef.current = requestAnimationFrame(instant ? converge : smooth); };
-        if (targetIdx >= 0 && startTop) requestAnimationFrame(() => requestAnimationFrame(begin));
-        else begin();
+        landingRef.current = requestAnimationFrame(land);
       },
     }),
     [setCurrentRowId, pericopeChunks]
