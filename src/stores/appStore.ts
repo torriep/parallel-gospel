@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import type { GospelKey } from '../lib/types';
 import { db } from '../lib/db';
-import { supportsContentVisibility } from '../lib/capabilities';
 
 interface AppState {
   isDarkMode: boolean;
@@ -102,7 +101,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   isAutoScrolling: false,
   sidebarRevealRowId: null,
   sidebarRevealNonce: 0,
-  renderAllMode: supportsContentVisibility,
+  // Default OFF: the content-visibility render-all renderer (VerseGridAll) has
+  // an unreliable verse landing on iPad WebKit — off-screen scenes skip layout,
+  // so rows report the scene's top and navigation parks at the scene start.
+  // Ship the proven virtualized VerseGrid instead. The dev toggle still flips
+  // this on, and capability detection remains in lib/capabilities for later.
+  renderAllMode: false,
   renderAllBuildMs: null,
   currentRefs: { MT: null, MC: null, LC: null, JN: null },
 
