@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, useMemo, useImperativeHandle, forwardRef, useEffect } from 'react';
+import { useCallback, useRef, useMemo, useImperativeHandle, forwardRef, useEffect } from 'react';
 import { useDataStore } from '../stores/dataStore';
 import { useAppStore } from '../stores/appStore';
 import { GOSPEL_KEYS } from '../lib/types';
@@ -39,12 +39,6 @@ export const VerseGridAll = forwardRef<VerseGridHandle, VerseGridAllProps>(funct
   // First-render timestamp (useRef init runs once) → measured against first paint.
   const buildStartRef = useRef(performance.now());
   const scrollerRef = useRef<HTMLDivElement | null>(null);
-
-  // During a landing we force a window of scenes around the target OUT of
-  // content-visibility skipping (→ 'visible') so they hold their REAL heights
-  // while we scroll. Driven by state (not an imperative style write) so React
-  // re-renders during the jump — e.g. the highlight flash — don't clobber it.
-  const [forcedVisible, setForcedVisible] = useState<{ lo: number; hi: number } | null>(null);
 
   // Same pericope-chunk builder as VerseGrid (duplicated to keep the shipping
   // grid untouched; this file is throwaway). Each chunk = a section header + its
@@ -208,84 +202,31 @@ export const VerseGridAll = forwardRef<VerseGridHandle, VerseGridAllProps>(funct
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // scrollToRow — land the target row at the top and KEEP it there, even on a
-  // first visit.
-  //
-  // Why the hand-rolled version failed on iPad (WebKit/WKWebView): scenes use
-  // `content-visibility: auto`, so an off-screen scene's INTERNAL layout is
-  // skipped and EVERY row inside it reports the SCENE's top for
-  // getBoundingClientRect. So our manual "scroll the row to offset 8" math
-  // happily parked the SCENE start at the top and saw delta≈0 — the verse sat
-  // a dozen rows below the fold (the reported bug). Blink lays the row out when
-  // queried, so it never showed there.
-  //
-  // Fix: delegate the scroll to the engine's native `scrollIntoView()`. The
-  // content-visibility spec guarantees scrollIntoView (like find-in-page) lays
-  // out and reveals skipped content correctly, in every engine. The 8px gap
-  // comes from `scroll-margin-top` on the row. We still force a window of scenes
-  // around the target out of skipping (`forcedVisible` state) so their real
-  // heights are settled first — WebKit has no scroll anchoring, so this stops an
-  // unanchored resize from nudging the target after it lands. A short verify
-  // loop re-issues scrollIntoView until the row holds the top; then the forced
-  // scenes return to `auto` (their real size is now cached, so no shift).
-  const landingRef = useRef<number | null>(null);
+  // scrollToRow: the target ALWAYS exists in the DOM, so this is just
+  // scrollIntoView. No mount race, no convergence loop. isAutoScrolling is
+  // toggled so the x-ray band freezes during the jump and resumes after.
   useImperativeHandle(
     ref,
     () => ({
       scrollToRow: (rowId: number, opts?: { instant?: boolean }) => {
         const container = scrollerRef.current;
         if (!container) return;
-        const smooth = opts?.instant === false;
+        const instant = !!opts?.instant;
         useAppStore.getState().setAutoScrolling(true);
         setCurrentRowId(rowId);
-
-        // A new command supersedes any landing still in progress.
-        if (landingRef.current != null) cancelAnimationFrame(landingRef.current);
-
-        // Force the target's neighbourhood to real heights (pixel-sized window:
-        // ~1.5 viewports up, ~1 down) so nothing above can resize after landing.
-        const targetIdx = pericopeChunks.findIndex(c => c.rows.some(r => r.id === rowId));
-        if (targetIdx >= 0) {
-          const vh = container.clientHeight || 800;
-          const estOf = (i: number) => pericopeChunks[i].rows.length * 88 + 40;
-          let lo = targetIdx, accUp = 0;
-          while (lo > 0 && accUp < vh * 1.5) { lo--; accUp += estOf(lo); }
-          let hi = targetIdx, accDown = 0;
-          while (hi < pericopeChunks.length - 1 && accDown < vh) { hi++; accDown += estOf(hi); }
-          setForcedVisible({ lo, hi });
-        }
-
-        const deadline = performance.now() + 1800;
-        const finish = () => {
-          landingRef.current = null;
-          requestAnimationFrame(() => requestAnimationFrame(() => setForcedVisible(null)));
-          useAppStore.getState().setAutoScrolling(false);
-        };
-
-        let stable = 0;
-        const land = () => {
+        const jump = () => {
           const el = container.querySelector(`[data-row-id="${rowId}"]`) as HTMLElement | null;
-          if (!el) {
-            if (performance.now() < deadline) landingRef.current = requestAnimationFrame(land);
-            else finish();
-            return;
-          }
-          // 8px gap, then let the ENGINE reveal the (possibly skipped) row —
-          // the part that works in WebKit where manual scrollTop math does not.
-          el.style.scrollMarginTop = '8px';
-          el.scrollIntoView({ block: 'start', inline: 'nearest', behavior: smooth ? 'smooth' : 'auto' });
-          if (smooth) { finish(); return; } // animation; re-issuing would restart it
-          // Verify against the real, now-laid-out position and hold a few frames
-          // so a late unanchored resize is re-corrected.
-          const top = el.getBoundingClientRect().top - container.getBoundingClientRect().top;
-          stable = Math.abs(top - 8) <= 2 ? stable + 1 : 0;
-          if (stable >= 3 || performance.now() > deadline) { finish(); return; }
-          landingRef.current = requestAnimationFrame(land);
+          if (!el) return false;
+          const top = el.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop - 8;
+          container.scrollTo({ top: Math.max(0, top), behavior: instant ? 'auto' : 'smooth' });
+          return true;
         };
-        landingRef.current = requestAnimationFrame(land);
+        // One retry next frame in case content-visibility hasn't laid the row out yet.
+        if (!jump()) requestAnimationFrame(jump);
+        setTimeout(() => useAppStore.getState().setAutoScrolling(false), instant ? 200 : 500);
       },
     }),
-    [setCurrentRowId, pericopeChunks]
+    [setCurrentRowId]
   );
 
   return (
@@ -298,18 +239,12 @@ export const VerseGridAll = forwardRef<VerseGridHandle, VerseGridAllProps>(funct
       {pericopeChunks.map((chunk, idx) => (
         <div
           key={chunk.pericope.id ?? idx}
-          data-cv-chunk={idx}
           style={{
             // The whole point of the experiment: keep the chunk in the DOM but
             // let the browser skip layout/paint while it is off-screen. The
             // `auto` size hint is remembered after the chunk renders once, so
             // the scrollbar settles. Estimate ≈ rows × row height + header.
-            // During a landing the target's neighbourhood is forced 'visible'
-            // so its real height is settled before we scroll (see scrollToRow).
-            contentVisibility:
-              forcedVisible && idx >= forcedVisible.lo && idx <= forcedVisible.hi
-                ? 'visible'
-                : 'auto',
+            contentVisibility: 'auto',
             containIntrinsicSize: `auto ${chunk.rows.length * 88 + 40}px`,
           }}
         >
